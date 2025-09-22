@@ -25,6 +25,15 @@ OPENAIAPIKEY    = os.getenv("OPENAIAPIKEY")
 AUTHOR_USERNAME = os.getenv("AUTHOR_USERNAME") or "adminUser"
 OPENAI_MODEL    = os.getenv("OPENAI_MODEL", "gpt-5")
 
+# Notificaciones
+SMTP_HOST   = os.getenv("SMTP_HOST")
+SMTP_PORT   = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USER   = os.getenv("SMTP_USER")
+SMTP_PASS   = os.getenv("SMTP_PASS")
+FROM_EMAIL  = os.getenv("FROM_EMAIL") or (SMTP_USER or "")
+TO_EMAIL    = os.getenv("NOTIFY_EMAIL") or "juanfranciscofernandezherreros@gmail.com"
+NOTIFY_VERBOSE = (os.getenv("NOTIFY_VERBOSE", "true").lower() in ("1","true","yes","y"))
+
 # ============ HELPERS ============
 def str_id(x):
     try:
@@ -81,9 +90,47 @@ def is_too_similar(title: str, candidates: list, threshold: float = 0.82) -> boo
 def now_utc():
     return datetime.now(tz=timezone.utc)
 
+# ========= Notificaciones / logging =========
+def send_notification_email(subject: str, html_body: str, text_body: str = None):
+    if not all([SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, FROM_EMAIL, TO_EMAIL]):
+        print("⚠️  Faltan variables SMTP para enviar el correo. Se omite el envío.")
+        return False
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = FROM_EMAIL
+    msg["To"] = TO_EMAIL
+    text_body = text_body or "Notificación del proceso."
+    msg.set_content(text_body)
+    msg.add_alternative(html_body, subtype="html")
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as smtp:
+            smtp.ehlo()
+            smtp.starttls()
+            smtp.login(SMTP_USER, SMTP_PASS)
+            smtp.send_message(msg)
+        print(f"📧 Notificación enviada a {TO_EMAIL}: {subject}")
+        return True
+    except Exception as e:
+        print(f"❌ Error enviando el correo: {e}", file=sys.stderr)
+        return False
+
+def notify(subject: str, message: str, level: str = "info", always_email: bool = True):
+    """
+    Centraliza impresión y envío de email. Si NOTIFY_VERBOSE es False,
+    sólo envía emails para level in ['error','warning'] salvo que always_email=True.
+    """
+    stamp = now_utc().isoformat()
+    prefix = {"info":"ℹ️","success":"✅","warning":"⚠️","error":"❌"}.get(level, "ℹ️")
+    line = f"{prefix} [{stamp}] {subject} :: {message}"
+    print(line)
+    should_email = always_email or NOTIFY_VERBOSE or (level in ("error","warning"))
+    if should_email:
+        html = f"<p><b>{subject}</b></p><p>{message}</p><p><small>{stamp} UTC</small></p>"
+        send_notification_email(subject=f"[{level.upper()}] {subject}", html_body=html, text_body=f"{subject}\n\n{message}\n\n{stamp} UTC")
+
 # ========= Dominio categorías/tags =========
 def index_tags(tags):
-    """NUEVO: índices útiles de tags por _id y por nombre/tag."""
+    """Índices útiles de tags por _id y por nombre/tag."""
     by_id = {}
     by_name = {}
     for t in tags:
@@ -144,7 +191,6 @@ def build_generation_prompt(parent_name: str, subcat_name: str, tag_text: str, a
         )
     return f"""
 Eres redactor técnico experto en Spring Boot y Lombok. Genera un artículo **en español** con la siguiente estructura JSON estricta:
-
 {{
   "title": "...",
   "summary": "...",
@@ -209,40 +255,6 @@ def find_author_id(db) -> ObjectId:
         uid = ObjectId(str(uid))
     return uid
 
-def send_notification_email(subject: str, html_body: str, text_body: str = None):
-    host = os.getenv("SMTP_HOST")
-    port = int(os.getenv("SMTP_PORT", "587"))
-    user = os.getenv("SMTP_USER")
-    pwd  = os.getenv("SMTP_PASS")
-    from_email = os.getenv("FROM_EMAIL") or (user or "")
-    to_email = os.getenv("NOTIFY_EMAIL") or "juanfranciscofernandezherreros@gmail.com"
-
-    if not all([host, port, user, pwd, from_email, to_email]):
-        print("⚠️ Faltan variables SMTP para enviar el correo. Se omite el envío.")
-        return False
-
-    msg = EmailMessage()
-    msg["Subject"] = subject
-    msg["From"] = from_email
-    msg["To"] = to_email
-
-    # Parte de texto (fallback) y HTML
-    text_body = text_body or "Se ha publicado un nuevo artículo."
-    msg.set_content(text_body)
-    msg.add_alternative(html_body, subtype="html")
-
-    try:
-        with smtplib.SMTP(host, port) as smtp:
-            smtp.ehlo()
-            smtp.starttls()
-            smtp.login(user, pwd)
-            smtp.send_message(msg)
-        print(f"📧 Notificación enviada a {to_email}")
-        return True
-    except Exception as e:
-        print(f"❌ Error enviando el correo: {e}", file=sys.stderr)
-        return False
-
 # ============ NUEVO: ventana "semana actual" (Europa/Madrid) ============
 def current_week_window_utc_for_madrid(start_weekday: int = 1):
     """
@@ -257,7 +269,6 @@ def current_week_window_utc_for_madrid(start_weekday: int = 1):
     end_local = start_local + timedelta(days=7)
     return start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc)
 
-# (Se conserva por si más adelante quisieras volver a la lógica diaria)
 def today_window_utc_for_madrid():
     """Devuelve (inicio_utc, fin_utc) del día actual en Europa/Madrid."""
     tz_madrid = ZoneInfo("Europe/Madrid")
@@ -276,11 +287,7 @@ def build_hierarchy(categories):
     return by_id, by_parent
 
 def guess_parent_and_subcat_for_tag(tag, categories, by_id, by_parent):
-    """Heurística para asociar un tag a (parent, subcategory).
-    - Si el tag referencia una categoría concreta que es hija (tiene parent), usamos su parent y esa subcategoría.
-    - Si referencia una categoría padre (sin parent), intentamos elegir una subcategoría hija.
-    - Si no encontramos nada, caemos a una pareja aleatoria válida.
-    """
+    """Heurística para asociar un tag a (parent, subcategory)."""
     cand_ids = [tag.get("categoryId"), tag.get("category_id"), tag.get("categoryRef")]
     cand_names = [tag.get("categoryName"), tag.get("category")]
     arr_keys = ("categories", "categoryIds", "category_ids")
@@ -332,13 +339,11 @@ def guess_parent_and_subcat_for_tag(tag, categories, by_id, by_parent):
     subcat = random.choice(children) if children else None
     return parent, subcat
 
-# ============ NUEVO: selección aleatoria de subcategoría con tags + tag sin artículo ============
 def find_subcats_with_tags(categories, by_parent, tags, tags_by_id, tags_by_name):
     """Devuelve lista de subcategorías que tienen al menos 1 tag relacionado."""
     subcats_with_tags = []
     for parent_id, subs in by_parent.items():
         if parent_id is None:
-            # este entry son categorías raíz; buscamos en sus hijos reales
             continue
         for sc in subs:
             rel = get_related_tags_for_category(sc, tags, tags_by_id, tags_by_name)
@@ -346,32 +351,27 @@ def find_subcats_with_tags(categories, by_parent, tags, tags_by_id, tags_by_name
                 subcats_with_tags.append((parent_id, sc, rel))
     return subcats_with_tags
 
+# ======= CAMBIO: permitir tags aunque ya tengan artículos =========
 def pick_random_subcat_and_tag_without_article(db, categories, by_id, by_parent, tags, tags_by_id, tags_by_name):
     """
-    Elige aleatoriamente una subcategoría con tags, y dentro selecciona
-    un tag que NO tenga aún artículos. Si todos tienen, prueba con otra subcategoría.
+    Elige aleatoriamente una subcategoría con tags y devuelve (parent, subcat, tag),
+    SIN descartar tags que ya tengan artículos previos.
     """
     candidates = find_subcats_with_tags(categories, by_parent, tags, tags_by_id, tags_by_name)
     random.shuffle(candidates)
 
     for parent_id, subcat, rel_tags in candidates:
         random.shuffle(rel_tags)
-        # descarta tags que ya tienen artículo
-        for t in rel_tags:
-            tid = ObjectId(str_id(t.get("_id")))
-            exists = db[ARTICLES_COLL].find_one({"tags": tid})
-            if not exists:
-                parent = by_id.get(parent_id) if parent_id else None
-                return parent, subcat, t
+        t = random.choice(rel_tags)
+        parent = by_id.get(parent_id) if parent_id else None
+        return parent, subcat, t
 
-    # Fallback: si todos tenían artículo, devolvemos cualquier (parent, subcat, tag) aleatorio
     if candidates:
         parent_id, subcat, rel_tags = random.choice(candidates)
         t = random.choice(rel_tags)
         parent = by_id.get(parent_id) if parent_id else None
         return parent, subcat, t
 
-    # Último recurso: mantener la heurística antigua
     if tags:
         t = random.choice(tags)
         parent, subcat = guess_parent_and_subcat_for_tag(t, categories, by_id, by_parent)
@@ -394,21 +394,19 @@ def get_recent_titles(db, limit=50):
     return titles
 
 def ensure_article_for_tag(db, client_ai, tag, parent, subcat, recent_titles, author_id):
-    """Genera e inserta un artículo para un tag si no existe ninguno. Devuelve True si creó algo."""
+    """Genera e inserta un artículo para un tag SIEMPRE (aunque ya exista alguno). Devuelve True si creó algo."""
     tag_id = ObjectId(str_id(tag.get("_id")))
 
-    # ¿ya existe al menos uno?
-    exists = db[ARTICLES_COLL].find_one({"tags": tag_id})
-    if exists:
-        print(f"➡️  Ya existe artículo para tag '{tag_name(tag)}' (_id={tag_id}). Se omite.")
-        return False
+    # Diferente: ya no se aborta si existe; solo se usan títulos para evitar parecidos
+    existing_for_tag = list(db[ARTICLES_COLL].find({"tags": tag_id}, {"title": 1}))
+    existing_titles_for_tag = [d.get("title", "") for d in existing_for_tag if d.get("title")]
 
     parent_name = parent.get("name") if parent else str_id(parent.get("_id")) if parent else "General"
     subcat_name = subcat.get("name") if subcat else str_id(subcat.get("_id")) if subcat else "General"
     tag_text = tag_name(tag)
 
-    # Evita títulos recientes muy parecidos
-    avoid_titles = recent_titles[:10]
+    # Evita títulos recientes y del mismo tag
+    avoid_titles = (recent_titles[:10] if recent_titles else []) + existing_titles_for_tag[:20]
 
     max_attempts = 5
     attempt = 0
@@ -417,15 +415,15 @@ def ensure_article_for_tag(db, client_ai, tag, parent, subcat, recent_titles, au
     while attempt < max_attempts:
         attempt += 1
         t, s, b = generate_article_with_ai(client_ai, parent_name, subcat_name, tag_text, avoid_titles=avoid_titles)
-        if is_too_similar(t, recent_titles[:20], threshold=0.86):
-            print(f"⚠️  Título similar detectado en intento {attempt}: '{t}'. Reintentando...")
+        if is_too_similar(t, recent_titles[:20], threshold=0.86) or is_too_similar(t, existing_titles_for_tag, threshold=0.86):
+            notify("Título similar detectado", f"Intento {attempt}: '{t}'. Reintentando...", level="warning", always_email=True)
             avoid_titles.append(t)
             continue
         title, summary, body = t, s, b
         break
 
     if not title or not body:
-        print("❌ No se pudo generar un título suficientemente diferente tras varios intentos.", file=sys.stderr)
+        notify("No se pudo generar título único", "Tras varios intentos no se logró un título suficientemente diferente.", level="error", always_email=True)
         return False
 
     base_slug = slugify(title)
@@ -453,28 +451,9 @@ def ensure_article_for_tag(db, client_ai, tag, parent, subcat, recent_titles, au
 
     # Inserta
     res = db[ARTICLES_COLL].insert_one(doc)
-    print(f"\n✅ Publicado en '{ARTICLES_COLL}' con _id = {res.inserted_id}")
-    print(f"📰 Título: {title}")
-    print(f"🔗 Slug:   {slug}")
-    print(f"🏷️  Tag usado: {tag_text} (id={str_id(tag.get('_id'))})")
-
-    # Notificación opcional por email
-    subject = f"Nuevo artículo publicado: {title}"
-    html_body = f"""
-    <p>Hola,</p>
-    <p>Se ha publicado un nuevo artículo:</p>
-    <ul>
-      <li><b>Título:</b> {title}</li>
-      <li><b>Slug:</b> {SITE}/post/{slug}</li>
-      <li><b>Fecha:</b> {now.isoformat()}</li>
-    </ul>
-    <p>Saludos.</p>
-    """
-    try:
-        send_notification_email(subject, html_body, text_body=f"Se ha publicado: {title} (slug: {slug})")
-    except Exception:
-        pass
-
+    notify("Artículo publicado",
+           f"Título: {title}<br>Slug: {SITE}/post/{slug if SITE else slug}<br>Tag: {tag_text} (id={str_id(tag.get('_id'))})",
+           level="success", always_email=True)
     # actualiza recientes para ayudar al siguiente tag
     recent_titles.insert(0, title)
     if len(recent_titles) > 50:
@@ -483,6 +462,8 @@ def ensure_article_for_tag(db, client_ai, tag, parent, subcat, recent_titles, au
 
 # ============ MAIN ============
 def main():
+    notify("Inicio de proceso", "Comenzando ejecución de publicación automática.", level="info", always_email=True)
+
     # Validaciones de entorno mínimas
     missing = []
     if not OPENAIAPIKEY: missing.append("OPENAIAPIKEY")
@@ -492,17 +473,19 @@ def main():
     if not USERS_COLL:    missing.append("USERS_COLL")
     if not CATEGORY_COLL: missing.append("CATEGORY_COLL")
     if not TAGS_COLL:     missing.append("TAGS_COLL")
-    
+
     if missing:
-        print("❌ Faltan variables de entorno: " + ", ".join(missing), file=sys.stderr)
+        msg = "Faltan variables de entorno: " + ", ".join(missing)
+        notify("Configuración incompleta", msg, level="error", always_email=True)
         sys.exit(1)
 
     # Conexión a Mongo
     try:
         client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=5000)
         db = client[DB_NAME]
+        notify("Conexión a MongoDB", f"Base de datos '{DB_NAME}' conectada correctamente.", level="success", always_email=True)
     except Exception as e:
-        print(f"❌ Error de conexión a MongoDB: {e}", file=sys.stderr)
+        notify("Error de conexión a MongoDB", str(e), level="error", always_email=True)
         sys.exit(1)
 
     # ===== Limitar a 1 artículo por semana (Europa/Madrid, lunes-domingo) =====
@@ -514,119 +497,97 @@ def main():
         })
 
         if already_this_week >= 1:
-            # Busca el último artículo publicado esta semana para incluirlo en el email
             last_doc = db[ARTICLES_COLL].find(
                 {"publishDate": {"$gte": start_utc, "$lt": end_utc}, "status": "published"},
                 {"title": 1, "slug": 1, "publishDate": 1}
             ).sort("publishDate", -1).limit(1)
             last_article = next(iter(last_doc), None)
-
-            # Construye y envía el email
             if last_article:
                 last_title = last_article.get("title", "(sin título)")
                 last_slug  = last_article.get("slug", "")
                 last_date  = last_article.get("publishDate")
                 link = f"{SITE}/post/{last_slug}" if SITE and last_slug else last_slug
-
-                subject = "Aviso: ya hay un artículo publicado esta semana"
-                html_body = f"""
-                <p>Hola,</p>
-                <p>La publicación automática no ha generado un nuevo artículo porque
-                ya existe al menos uno publicado esta semana (ventana lunes-domingo Europa/Madrid).</p>
-                <ul>
-                  <li><b>Título:</b> {last_title}</li>
-                  <li><b>Slug:</b> {link}</li>
-                  <li><b>Fecha:</b> {(last_date.isoformat() if last_date else 'N/D')}</li>
-                </ul>
-                <p>Si deseas forzar una nueva publicación, ajusta la lógica del límite semanal.</p>
-                """
-                try:
-                    send_notification_email(
-                        subject,
-                        html_body,
-                        text_body=f"Ya hay un artículo esta semana: {last_title} (slug: {link})"
-                    )
-                except Exception:
-                    pass
+                notify("Límite semanal alcanzado",
+                       f"Ya existe al menos un artículo esta semana.<br><b>Título:</b> {last_title}<br><b>Slug:</b> {link}<br><b>Fecha:</b> {last_date.isoformat() if last_date else 'N/D'}",
+                       level="warning", always_email=True)
             else:
-                subject = "Aviso: ya hay un artículo publicado esta semana"
-                html_body = """
-                <p>Hola,</p>
-                <p>La publicación automática no ha generado un nuevo artículo porque
-                ya existe al menos uno publicado esta semana (ventana lunes-domingo Europa/Madrid).</p>
-                <p>No se pudo recuperar el detalle del último artículo.</p>
-                """
-                try:
-                    send_notification_email(
-                        subject,
-                        html_body,
-                        text_body="La publicación automática se canceló: ya existe un artículo esta semana."
-                    )
-                except Exception:
-                    pass
+                notify("Límite semanal alcanzado", "Ya existe al menos un artículo esta semana (no se pudo recuperar el detalle).", level="warning", always_email=True)
 
             print("🟨 Ya hay un artículo publicado esta semana. Se cancela la ejecución.")
             sys.exit(0)   # cortar ejecución si ya hay uno esta semana
 
     except Exception as e:
-        print(f"❌ Error comprobando artículos de la semana: {e}", file=sys.stderr)
+        notify("Error comprobando límite semanal", str(e), level="error", always_email=True)
         sys.exit(1)
 
     # Carga básica necesaria para continuar
     try:
         categories = list(db[CATEGORY_COLL].find({}))
         tags = list(db[TAGS_COLL].find({}))
+        notify("Datos cargados", f"Categorías: {len(categories)}; Tags: {len(tags)}.", level="info", always_email=True)
     except Exception as e:
-        print(f"❌ Error consultando colecciones: {e}", file=sys.stderr)
+        notify("Error consultando colecciones", str(e), level="error", always_email=True)
         sys.exit(1)
 
     if not categories:
-        print("No hay categorías en la colección.")
+        notify("Sin categorías", "No hay categorías en la colección.", level="warning", always_email=True)
         return
 
     if not tags:
-        print("No hay tags en la colección.")
+        notify("Sin tags", "No hay tags en la colección.", level="warning", always_email=True)
         return
 
     # Autor
     try:
         author_id = find_author_id(db)
-        print(f"👤 Autor encontrado: {AUTHOR_USERNAME} (id={author_id})")
+        notify("Autor encontrado", f"{AUTHOR_USERNAME} (id={author_id})", level="success", always_email=True)
     except Exception as e:
-        print(f"❌ {e}", file=sys.stderr)
+        notify("Autor no encontrado", str(e), level="error", always_email=True)
         sys.exit(1)
 
     # Índices/jerarquía
     by_id, by_parent = build_hierarchy(categories)
-    tags_by_id, tags_by_name = index_tags(tags)  # NUEVO
+    tags_by_id, tags_by_name = index_tags(tags)
 
     # Títulos recientes para control de parecido
     recent_titles = get_recent_titles(db, limit=50)
+    notify("Control de similitud", f"Títulos recientes cargados: {len(recent_titles)}", level="info", always_email=True)
 
     # Cliente OpenAI
-    client_ai = OpenAI(api_key=OPENAIAPIKEY)
+    try:
+        client_ai = OpenAI(api_key=OPENAIAPIKEY)
+        notify("OpenAI listo", f"Modelo: {OPENAI_MODEL}", level="info", always_email=True)
+    except Exception as e:
+        notify("Error inicializando OpenAI", str(e), level="error", always_email=True)
+        sys.exit(1)
 
-    # ===== NUEVO: elegir aleatoriamente una subcategoría con tags y un tag sin artículo =====
+    # Elegir subcategoría y tag (permitiendo repetidos)
     parent, subcat, tag = pick_random_subcat_and_tag_without_article(
         db, categories, by_id, by_parent, tags, tags_by_id, tags_by_name
     )
 
     if not tag:
-        print("❌ No se pudo seleccionar (subcategoría, tag) para generar un artículo.", file=sys.stderr)
+        notify("Selección fallida", "No se pudo seleccionar (subcategoría, tag) para generar un artículo.", level="error", always_email=True)
         sys.exit(1)
+
+    notify("Selección realizada",
+           f"Parent: {parent.get('name') if parent else 'N/D'}; Subcat: {subcat.get('name') if subcat else 'N/D'}; Tag: {tag_name(tag)}",
+           level="info", always_email=True)
 
     # Publica exactamente 1 artículo (cumpliendo el límite semanal ya comprobado)
     created = False
     try:
         created = ensure_article_for_tag(db, client_ai, tag, parent, subcat, recent_titles, author_id)
     except Exception as e:
-        print(f"❌ Error generando/insertando para tag '{tag_name(tag)}': {e}", file=sys.stderr)
+        notify("Error generando/insertando artículo", f"Tag '{tag_name(tag)}' :: {e}", level="error", always_email=True)
 
     if created:
+        notify("Proceso terminado", "Artículos creados: 1 (límite semanal alcanzado).", level="success", always_email=True)
         print("\n🟦 Límite semanal alcanzado (1). Proceso detenido.")
         print("\n🟩 Proceso terminado. Artículos creados: 1")
     else:
-        print("\n🟩 Proceso terminado. Artículos creados: 0 (posiblemente ya existía para ese tag)")
+        notify("Proceso terminado", "Artículos creados: 0 (posiblemente ya existía un título muy similar).", level="warning", always_email=True)
+        print("\n🟩 Proceso terminado. Artículos creados: 0")
 
 if __name__ == "__main__":
     main()
