@@ -141,12 +141,16 @@ def index_tags(tags):
             by_name[nm] = t
     return by_id, by_name
 
-def get_related_tags_for_category(subcat, tags, tags_by_id, tags_by_name):
+def get_related_tags_for_category(cat_or_subcat, tags, tags_by_id, tags_by_name):
+    """
+    Devuelve los tags relacionados con una categoría o subcategoría.
+    Acepta tanto nodos padre como hijos.
+    """
     related = []
     # claves directas
     for key in ("tags", "tagIds", "tagsIds"):
-        if key in subcat:
-            for raw in as_list(subcat.get(key)):
+        if key in cat_or_subcat:
+            for raw in as_list(cat_or_subcat.get(key)):
                 sid = str_id(raw)
                 if sid in tags_by_id:
                     related.append(tags_by_id[sid])
@@ -156,19 +160,19 @@ def get_related_tags_for_category(subcat, tags, tags_by_id, tags_by_name):
                         related.append(tags_by_name[nm])
 
     if not related:
-        sc_id = str_id(subcat.get("_id"))
-        sc_name = str(subcat.get("name") or subcat.get("title") or sc_id)
+        node_id = str_id(cat_or_subcat.get("_id"))
+        node_name = str(cat_or_subcat.get("name") or cat_or_subcat.get("title") or node_id)
         for t in tags:
             cand_ids = [t.get("categoryId"), t.get("category_id"), t.get("categoryRef")]
             cand_names = [t.get("categoryName"), t.get("category")]
-            if any(str_id(cid) == sc_id for cid in cand_ids if cid is not None):
+            if any(str_id(cid) == node_id for cid in cand_ids if cid is not None):
                 related.append(t); continue
-            if any(str(cn).strip() == sc_name for cn in cand_names if cn):
+            if any(str(cn).strip() == node_name for cn in cand_names if cn):
                 related.append(t); continue
             for arr_key in ("categories", "categoryIds", "category_ids"):
                 if arr_key in t:
                     arr = as_list(t.get(arr_key))
-                    if any(str_id(x) == sc_id or str(x) == sc_name for x in arr):
+                    if any(str_id(x) == node_id or str(x) == node_name for x in arr):
                         related.append(t); break
 
     # únicos por _id
@@ -255,6 +259,20 @@ def find_author_id(db) -> ObjectId:
         uid = ObjectId(str(uid))
     return uid
 
+# ======== NUEVO: helper para saber si un tag ya tiene artículos publicados ========
+def tag_has_published_article(db, tag) -> bool:
+    """
+    Devuelve True si ya existe al menos un artículo publicado para este tag.
+    """
+    try:
+        tag_id = ObjectId(str_id(tag.get("_id")))
+    except Exception:
+        return False
+    return db[ARTICLES_COLL].count_documents({
+        "tags": tag_id,
+        "status": "published"
+    }) > 0
+
 # ============ NUEVO: ventana "semana actual" (Europa/Madrid) ============
 def current_week_window_utc_for_madrid(start_weekday: int = 1):
     """
@@ -340,8 +358,14 @@ def guess_parent_and_subcat_for_tag(tag, categories, by_id, by_parent):
     return parent, subcat
 
 def find_subcats_with_tags(categories, by_parent, tags, tags_by_id, tags_by_name):
-    """Devuelve lista de subcategorías que tienen al menos 1 tag relacionado."""
+    """
+    Devuelve lista de (parent_id, subcat, rel_tags) con:
+      - Subcategorías (categorías con parent) que tengan tags relacionados.
+      - Categorías SIN hijos pero con tags relacionados (permitiendo publicar sin subcategorías).
+    """
     subcats_with_tags = []
+
+    # 1) Subcategorías normales (tienen padre)
     for parent_id, subs in by_parent.items():
         if parent_id is None:
             continue
@@ -349,34 +373,48 @@ def find_subcats_with_tags(categories, by_parent, tags, tags_by_id, tags_by_name
             rel = get_related_tags_for_category(sc, tags, tags_by_id, tags_by_name)
             if rel:
                 subcats_with_tags.append((parent_id, sc, rel))
+
+    # 2) Categorías sin hijos (no aparecen como clave padre) que tengan tags asociados
+    #    Esto permite publicar aunque no existan subcategorías.
+    parent_ids = set(by_parent.keys()) - {None}
+    categories_with_children = {pid for pid in parent_ids if pid is not None}
+    for c in categories:
+        cid = str_id(c.get("_id"))
+        if cid not in by_parent:  # no tiene subcategorías registradas
+            rel = get_related_tags_for_category(c, tags, tags_by_id, tags_by_name)
+            if rel:
+                # parent_id = None, usamos la propia categoría como "subcat" destino
+                subcats_with_tags.append((None, c, rel))
+
     return subcats_with_tags
 
-# ======= CAMBIO: permitir tags aunque ya tengan artículos =========
+# ======= Selección: elegir SOLO tags sin artículos publicados =========
 def pick_random_subcat_and_tag_without_article(db, categories, by_id, by_parent, tags, tags_by_id, tags_by_name):
     """
-    Elige aleatoriamente una subcategoría con tags y devuelve (parent, subcat, tag),
-    SIN descartar tags que ya tengan artículos previos.
+    Elige aleatoriamente (parent, subcat, tag) tal que el tag NO tenga artículos publicados.
+    Si no queda ningún tag disponible, devuelve (None, None, None).
     """
     candidates = find_subcats_with_tags(categories, by_parent, tags, tags_by_id, tags_by_name)
     random.shuffle(candidates)
 
+    # Intentar primero por nodos con tags disponibles (sin artículos publicados)
     for parent_id, subcat, rel_tags in candidates:
-        random.shuffle(rel_tags)
-        t = random.choice(rel_tags)
+        available_tags = [t for t in rel_tags if not tag_has_published_article(db, t)]
+        if not available_tags:
+            continue
+        random.shuffle(available_tags)
+        t = random.choice(available_tags)
         parent = by_id.get(parent_id) if parent_id else None
         return parent, subcat, t
 
-    if candidates:
-        parent_id, subcat, rel_tags = random.choice(candidates)
-        t = random.choice(rel_tags)
-        parent = by_id.get(parent_id) if parent_id else None
-        return parent, subcat, t
-
-    if tags:
-        t = random.choice(tags)
+    # Si no encontramos por candidatos, probar con el universo global de tags
+    available_global = [t for t in tags if not tag_has_published_article(db, t)]
+    if available_global:
+        t = random.choice(available_global)
         parent, subcat = guess_parent_and_subcat_for_tag(t, categories, by_id, by_parent)
         return parent, subcat, t
 
+    # No queda nada disponible
     return None, None, None
 
 def get_recent_titles(db, limit=50):
@@ -394,15 +432,15 @@ def get_recent_titles(db, limit=50):
     return titles
 
 def ensure_article_for_tag(db, client_ai, tag, parent, subcat, recent_titles, author_id):
-    """Genera e inserta un artículo para un tag SIEMPRE (aunque ya exista alguno). Devuelve True si creó algo."""
+    """Genera e inserta un artículo para un tag. Devuelve True si creó algo."""
     tag_id = ObjectId(str_id(tag.get("_id")))
 
-    # Diferente: ya no se aborta si existe; solo se usan títulos para evitar parecidos
+    # Info de títulos existentes (por robustez), aunque el tag se ha filtrado sin artículos publicados
     existing_for_tag = list(db[ARTICLES_COLL].find({"tags": tag_id}, {"title": 1}))
     existing_titles_for_tag = [d.get("title", "") for d in existing_for_tag if d.get("title")]
 
-    parent_name = parent.get("name") if parent else str_id(parent.get("_id")) if parent else "General"
-    subcat_name = subcat.get("name") if subcat else str_id(subcat.get("_id")) if subcat else "General"
+    parent_name = parent.get("name") if parent else (subcat.get("parentName") if subcat and subcat.get("parentName") else "General")
+    subcat_name = subcat.get("name") if subcat else "General"
     tag_text = tag_name(tag)
 
     # Evita títulos recientes y del mismo tag
@@ -450,7 +488,7 @@ def ensure_article_for_tag(db, client_ai, tag, parent, subcat, recent_titles, au
     }
 
     # Inserta
-    res = db[ARTICLES_COLL].insert_one(doc)
+    db[ARTICLES_COLL].insert_one(doc)
     notify("Artículo publicado",
            f"Título: {title}<br>Slug: {SITE}/post/{slug if SITE else slug}<br>Tag: {tag_text} (id={str_id(tag.get('_id'))})",
            level="success", always_email=True)
@@ -561,14 +599,20 @@ def main():
         notify("Error inicializando OpenAI", str(e), level="error", always_email=True)
         sys.exit(1)
 
-    # Elegir subcategoría y tag (permitiendo repetidos)
+    # Elegir categoría/subcategoría y tag (SOLO tags sin artículos publicados)
     parent, subcat, tag = pick_random_subcat_and_tag_without_article(
         db, categories, by_id, by_parent, tags, tags_by_id, tags_by_name
     )
 
     if not tag:
-        notify("Selección fallida", "No se pudo seleccionar (subcategoría, tag) para generar un artículo.", level="error", always_email=True)
-        sys.exit(1)
+        notify(
+            "Sin categorías/tags disponibles",
+            "No queda ninguna categoría/tag sin artículos publicados. No se publicará nada.",
+            level="warning",
+            always_email=True
+        )
+        print("🟨 No quedan categorías/tags disponibles sin artículos publicados. Proceso detenido.")
+        sys.exit(0)
 
     notify("Selección realizada",
            f"Parent: {parent.get('name') if parent else 'N/D'}; Subcat: {subcat.get('name') if subcat else 'N/D'}; Tag: {tag_name(tag)}",
@@ -589,5 +633,5 @@ def main():
         notify("Proceso terminado", "Artículos creados: 0 (posiblemente ya existía un título muy similar).", level="warning", always_email=True)
         print("\n🟩 Proceso terminado. Artículos creados: 0")
 
-if __name__ == "__main__":
+if __name__ == "__main__": 
     main()
