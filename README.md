@@ -9,7 +9,8 @@
 | Herramienta | Versión mínima | Para qué |
 |---|---|---|
 | **Python** | 3.10+ | Ejecutar el script |
-| **Docker** y **Docker Compose** | Docker 20+ | Levantar MongoDB |
+| **Docker** y **Docker Compose** | Docker 20+ | Levantar MongoDB local (opcional) |
+| **Cuenta MongoDB Atlas** | — | Cluster en la nube (recomendado) |
 | **Clave de OpenAI** | — | Generar artículos con IA |
 
 ### 1. Clonar el repositorio
@@ -19,7 +20,19 @@ git clone https://github.com/juanfranciscofernandezherreros/python-openai.git
 cd python-openai
 ```
 
-### 2. Levantar MongoDB con Docker Compose
+### 2. Configurar MongoDB
+
+#### Opción A – MongoDB Atlas (recomendado)
+
+El cluster de MongoDB Atlas ya está disponible en:
+
+```
+mongodb+srv://ex_dbuser:<db_password>@cluster0.9kjmkdg.mongodb.net/?appName=Cluster0
+```
+
+No necesitas Docker. Simplemente salta al paso 3 y rellena la variable `MONGODB_URI` con esta cadena de conexión (sustituyendo `<db_password>` por la contraseña real del usuario `ex_dbuser`).
+
+#### Opción B – MongoDB local con Docker Compose
 
 ```bash
 docker compose up -d
@@ -51,12 +64,13 @@ Abre `.env` con tu editor y rellena, como mínimo:
 
 | Variable | Qué poner |
 |---|---|
+| `MONGODB_URI` | URI de Atlas: `mongodb+srv://ex_dbuser:<db_password>@cluster0.9kjmkdg.mongodb.net/?appName=Cluster0` (sustituye `<db_password>`) |
 | `OPENAIAPIKEY` | Tu clave de API de OpenAI (`sk-...`) |
 | `SMTP_*` / `FROM_EMAIL` / `NOTIFY_EMAIL` | Datos de tu servidor de correo (SMTP) |
 | `AUTHOR_USERNAME` | Nombre del usuario autor en tu base de datos |
 | `SITE` | URL de tu web (p. ej. `https://tusitio.com`) |
 
-> **Nota:** Si usas el `docker-compose.yml` incluido, la variable `MONGODB_URI` ya viene configurada correctamente y no necesitas cambiarla.
+> **Nota:** Si usas el `docker-compose.yml` incluido para MongoDB local, cambia `MONGODB_URI` a `mongodb://admin:admin1234@localhost:27017/blogdb?authSource=admin`.
 
 ### 4. Instalar dependencias de Python
 
@@ -69,13 +83,14 @@ pip install -r requirements.txt
 Antes de generar artículos, es necesario que la base de datos tenga categorías y
 tags. Puedes hacerlo de dos formas:
 
-**Opción A – Automática (con Docker Compose)**
+**Opción A – Automática (con Docker Compose local)**
 
 Al levantar el contenedor por primera vez, el script `mongo-init/init_seed.js`
 se ejecuta automáticamente y siembra todos los datos. No necesitas hacer nada más.
 
 > **Nota:** Este seed automático solo ocurre cuando el volumen `mongo_data` está
 > vacío (primera vez). Si ya tienes el contenedor corriendo, usa la Opción B.
+> Si usas MongoDB Atlas, usa siempre la Opción B.
 
 **Opción B – Manual (script Python)**
 
@@ -116,7 +131,7 @@ pip install pytest
 python -m pytest test_generateArticle.py -v
 ```
 
-### Comandos útiles de Docker Compose
+### Comandos útiles de Docker Compose (solo para MongoDB local)
 
 ```bash
 # Ver logs de MongoDB
@@ -149,7 +164,7 @@ Antes de poder publicar artículos, el script necesita algunos datos y accesos:
 
 | Tipo de dato | Para qué sirve |
 |---------------|----------------|
-| **Base de datos MongoDB** | Donde están las categorías, etiquetas (tags), usuarios y artículos. |
+| **Base de datos MongoDB** | Donde están las categorías, etiquetas (tags), usuarios y artículos. Puede ser un cluster Atlas o una instancia local. |
 | **Clave de OpenAI** | Es la llave que permite que la IA escriba los artículos. |
 | **Servidor de correo (SMTP)** | Para poder enviarte emails con las notificaciones. |
 | **Usuario autor** | El nombre del usuario (por ejemplo “adminUser”) con el que se publicarán los artículos. |
