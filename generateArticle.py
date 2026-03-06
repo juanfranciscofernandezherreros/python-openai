@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 import os, sys, json, random, re, unicodedata, difflib, logging
 import smtplib
+import time as _time
 from datetime import datetime, timezone, time, timedelta
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from zoneinfo import ZoneInfo
 from pymongo import MongoClient
 from pymongo.database import Database
@@ -178,17 +179,17 @@ def preload_published_category_ids(db: Database) -> Set[str]:
     return {str(doc["_id"]) for doc in db[ARTICLES_COLL].aggregate(pipeline)}
 
 # ========= Retry con back-off exponencial =========
-def _retry_with_backoff(fn, max_retries: int = OPENAI_MAX_RETRIES, base_delay: float = OPENAI_RETRY_BASE_DELAY):
+def _retry_with_backoff(fn: Callable, max_retries: int = OPENAI_MAX_RETRIES, base_delay: float = OPENAI_RETRY_BASE_DELAY) -> Any:
     """Ejecuta *fn()* con reintentos y back-off exponencial. Reintenta solo errores transitorios."""
     last_exc: Optional[Exception] = None
     for attempt in range(1, max_retries + 1):
         try:
             return fn()
-        except (ConnectionError, TimeoutError, OSError) as exc:
+        except (ConnectionError, TimeoutError) as exc:
             last_exc = exc
             wait = base_delay * (2 ** (attempt - 1)) + random.uniform(0, 1)
             logger.warning("Reintento %d/%d tras error transitorio: %s (espera %.1fs)", attempt, max_retries, exc, wait)
-            import time as _time; _time.sleep(wait)
+            _time.sleep(wait)
         except Exception:
             raise
     raise RuntimeError(f"Falló tras {max_retries} reintentos") from last_exc
