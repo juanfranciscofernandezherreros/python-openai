@@ -1,0 +1,102 @@
+# ============================================================
+# cloud-run-job.yaml – Cloud Run Job
+# ============================================================
+# Alternativa sin clúster al CronJob de Kubernetes.
+# El Job se ejecuta bajo demanda o mediante un trigger de
+# Cloud Scheduler (ver instrucciones en README).
+#
+# Requisitos previos:
+#   1. Imagen publicada en Artifact Registry (ver cloudbuild.yaml).
+#   2. Secretos creados en Secret Manager (ver README).
+#   3. Service Account con los roles:
+#        - roles/secretmanager.secretAccessor
+#        - roles/run.invoker  (solo si usas Cloud Scheduler)
+#
+# Desplegar:
+#   gcloud run jobs replace gcloud/cloud-run-job.yaml \
+#     --region=europe-west1
+#
+# Ejecutar manualmente:
+#   gcloud run jobs execute article-generator --region=europe-west1
+# ============================================================
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: article-generator
+  # Sustituye <PROJECT_ID> por el ID real de tu proyecto GCP
+  # y <REGION> por la región donde despliegas (ej. europe-west1).
+  annotations:
+    run.googleapis.com/launch-stage: GA
+spec:
+  template:
+    spec:
+      # Número máximo de reintentos en caso de fallo
+      maxRetries: 1
+      # Tiempo máximo de ejecución (5 minutos)
+      timeoutSeconds: 300
+      template:
+        spec:
+          # Service Account con acceso a Secret Manager.
+          # Sustituye <PROJECT_ID> por el ID real de tu proyecto.
+          serviceAccountName: article-generator-sa@<PROJECT_ID>.iam.gserviceaccount.com
+          containers:
+            - image: <REGION>-docker.pkg.dev/<PROJECT_ID>/article-generator/article-generator:latest
+              resources:
+                limits:
+                  cpu: "1"
+                  memory: 512Mi
+              env:
+                # ── Variables no sensibles ──────────────────────────────────
+                - name: DB_NAME
+                  value: blogdb
+                - name: CATEGORY_COLL
+                  value: categories
+                - name: TAGS_COLL
+                  value: tags
+                - name: USERS_COLL
+                  value: users
+                - name: ARTICLES_COLL
+                  value: articles
+                - name: OPENAI_MODEL
+                  value: gpt-4o
+                - name: SITE
+                  value: https://tusitio.com
+                - name: AUTHOR_USERNAME
+                  value: adminUser
+                - name: SMTP_HOST
+                  value: smtp.gmail.com
+                - name: SMTP_PORT
+                  value: "587"
+                - name: FROM_EMAIL
+                  value: tu_correo@gmail.com
+                - name: NOTIFY_EMAIL
+                  value: tu_correo@gmail.com
+                - name: NOTIFY_VERBOSE
+                  value: "true"
+                - name: LIMIT_PUBLICATION
+                  value: "true"
+                - name: SEND_PROMPT_EMAIL
+                  value: "false"
+                # ── Variables sensibles desde Secret Manager ─────────────────
+                # Crea cada secreto con:
+                #   echo -n "valor" | gcloud secrets create NOMBRE --data-file=-
+                - name: MONGODB_URI
+                  valueFrom:
+                    secretKeyRef:
+                      name: MONGODB_URI
+                      key: latest
+                - name: OPENAIAPIKEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: OPENAIAPIKEY
+                      key: latest
+                - name: SMTP_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: SMTP_USER
+                      key: latest
+                - name: SMTP_PASS
+                  valueFrom:
+                    secretKeyRef:
+                      name: SMTP_PASS
+                      key: latest

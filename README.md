@@ -9,6 +9,7 @@ Sistema de generación y publicación automática de artículos técnicos con in
 - [🚀 Guía rápida de ejecución](#-guía-rápida-de-ejecución)
 - [🐳 Despliegue con Docker](#-despliegue-con-docker)
 - [☸️ Despliegue en Kubernetes](#️-despliegue-en-kubernetes)
+- [☁️ Despliegue en Google Cloud (GCloud)](#️-despliegue-en-google-cloud-gcloud)
 - [📰 ¿Qué es este script?](#-qué-es-este-script)
 - [🔍 Funcionalidades SEO](#-funcionalidades-seo)
 - [⚙️ ¿Qué necesita para funcionar?](#️-qué-necesita-para-funcionar)
@@ -324,6 +325,148 @@ kubectl logs -l app=article-generator --tail=100
 
 ```bash
 kubectl delete -f k8s/
+```
+
+---
+
+## ☁️ Despliegue en Google Cloud (GCloud)
+
+Sí, **también funciona en Google Cloud**. El directorio `gcloud/` contiene los ficheros necesarios para dos estrategias:
+
+```
+gcloud/
+├── cloudbuild.yaml      # Cloud Build – construye y sube la imagen a Artifact Registry
+└── cloud-run-job.yaml   # Cloud Run Job – ejecuta el generador sin necesidad de un clúster K8s
+```
+
+Puedes elegir entre:
+
+| Estrategia | Cuándo usarla |
+|---|---|
+| **GKE** (Google Kubernetes Engine) | Ya tienes un clúster K8s en GCP — usa directamente los manifiestos de `k8s/` |
+| **Cloud Run Jobs** | Quieres una solución serverless sin gestionar clústeres |
+
+---
+
+### Opción A – GKE (usar los manifiestos `k8s/` existentes)
+
+GKE es Kubernetes gestionado por Google, por lo que los manifiestos de `k8s/` funcionan sin cambios.
+
+#### 1. Autenticarse y configurar kubectl
+
+```bash
+gcloud auth login
+gcloud container clusters get-credentials <NOMBRE_CLUSTER> \
+  --region=<REGION> --project=<PROJECT_ID>
+```
+
+#### 2. Publicar la imagen en Artifact Registry
+
+```bash
+# Configurar Docker para autenticarse con Artifact Registry
+gcloud auth configure-docker <REGION>-docker.pkg.dev
+
+# Construir y subir la imagen
+docker build -t <REGION>-docker.pkg.dev/<PROJECT_ID>/article-generator/article-generator:latest .
+docker push <REGION>-docker.pkg.dev/<PROJECT_ID>/article-generator/article-generator:latest
+```
+
+O usa Cloud Build para automatizarlo:
+
+```bash
+gcloud builds submit \
+  --config=gcloud/cloudbuild.yaml \
+  --substitutions=_REGION=europe-west1,_REPOSITORY=article-generator,_IMAGE=article-generator \
+  .
+```
+
+#### 3. Actualizar la imagen en `k8s/cronjob.yaml`
+
+Sustituye `article-generator:latest` por la ruta completa de Artifact Registry:
+
+```
+image: <REGION>-docker.pkg.dev/<PROJECT_ID>/article-generator/article-generator:latest
+```
+
+#### 4. Aplicar los manifiestos
+
+```bash
+kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/secret.yaml   # rellena los valores base64 antes
+kubectl apply -f k8s/cronjob.yaml
+```
+
+---
+
+### Opción B – Cloud Run Jobs (serverless)
+
+Cloud Run Jobs es la opción nativa de Google Cloud para ejecutar tareas en contenedores sin gestionar infraestructura. Se programa con **Cloud Scheduler**.
+
+#### 1. Crear los secretos en Secret Manager
+
+```bash
+# Crear cada secreto con el valor real (sin salto de línea final)
+echo -n "mongodb+srv://..." | gcloud secrets create MONGODB_URI  --data-file=- --project=<PROJECT_ID>
+echo -n "sk-XXXX"           | gcloud secrets create OPENAIAPIKEY --data-file=- --project=<PROJECT_ID>
+echo -n "correo@gmail.com"  | gcloud secrets create SMTP_USER    --data-file=- --project=<PROJECT_ID>
+echo -n "contraseña_app"    | gcloud secrets create SMTP_PASS    --data-file=- --project=<PROJECT_ID>
+```
+
+#### 2. Construir y subir la imagen
+
+```bash
+gcloud builds submit \
+  --config=gcloud/cloudbuild.yaml \
+  --substitutions=_REGION=europe-west1,_REPOSITORY=article-generator,_IMAGE=article-generator \
+  .
+```
+
+#### 3. Editar `gcloud/cloud-run-job.yaml`
+
+Sustituye los marcadores `<PROJECT_ID>` y `<REGION>` en el fichero por tus valores reales.
+
+#### 4. Desplegar el Cloud Run Job
+
+```bash
+gcloud run jobs replace gcloud/cloud-run-job.yaml --region=<REGION>
+```
+
+#### 5. Programar ejecución semanal con Cloud Scheduler
+
+```bash
+# Crear una cuenta de servicio para que el Scheduler invoque el Job
+gcloud iam service-accounts create article-generator-sa \
+  --display-name="Article Generator SA" \
+  --project=<PROJECT_ID>
+
+# Dar permisos para invocar Cloud Run Jobs
+gcloud projects add-iam-policy-binding <PROJECT_ID> \
+  --member="serviceAccount:article-generator-sa@<PROJECT_ID>.iam.gserviceaccount.com" \
+  --role="roles/run.invoker"
+
+# Crear el job de Cloud Scheduler (cada lunes a las 08:00 Europe/Madrid)
+gcloud scheduler jobs create http article-generator-weekly \
+  --location=<REGION> \
+  --schedule="0 8 * * 1" \
+  --time-zone="Europe/Madrid" \
+  --uri="https://<REGION>-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/<PROJECT_ID>/jobs/article-generator:run" \
+  --http-method=POST \
+  --oauth-service-account-email="article-generator-sa@<PROJECT_ID>.iam.gserviceaccount.com" \
+  --project=<PROJECT_ID>
+```
+
+#### 6. Ejecutar manualmente
+
+```bash
+gcloud run jobs execute article-generator --region=<REGION>
+```
+
+Consulta los logs:
+
+```bash
+gcloud logging read \
+  'resource.type="cloud_run_job" AND resource.labels.job_name="article-generator"' \
+  --limit=50 --project=<PROJECT_ID>
 ```
 
 ---

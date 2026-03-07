@@ -1,0 +1,54 @@
+# ============================================================
+# cloudbuild.yaml – Cloud Build pipeline
+# ============================================================
+# Construye la imagen del generador de artículos y la sube a
+# Google Artifact Registry.
+#
+# Variables de sustitución (definir en el trigger o en CLI):
+#   _REGION       – región del registry   (ej. europe-west1)
+#   _REPOSITORY   – nombre del repo en AR  (ej. article-generator)
+#   _IMAGE        – nombre de la imagen    (ej. article-generator)
+#
+# Ejecutar manualmente:
+#   gcloud builds submit \
+#     --config=gcloud/cloudbuild.yaml \
+#     --substitutions=_REGION=europe-west1,_REPOSITORY=article-generator,_IMAGE=article-generator \
+#     .
+# ============================================================
+
+substitutions:
+  _REGION: europe-west1
+  _REPOSITORY: article-generator
+  _IMAGE: article-generator
+
+steps:
+  # ── 1. Construir la imagen Docker ─────────────────────────────────────────
+  - name: gcr.io/cloud-builders/docker
+    id: build
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$SHORT_SHA
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:latest
+      - .
+
+  # ── 2. Subir la imagen al Artifact Registry ───────────────────────────────
+  - name: gcr.io/cloud-builders/docker
+    id: push-sha
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$SHORT_SHA
+
+  - name: gcr.io/cloud-builders/docker
+    id: push-latest
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:latest
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$SHORT_SHA
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY
