@@ -72,7 +72,23 @@ Abre `.env` con tu editor y rellena, como mínimo:
 
 > **Nota:** Si usas el `docker-compose.yml` incluido para MongoDB local, cambia `MONGODB_URI` a `mongodb://admin:admin1234@localhost:27017/blogdb?authSource=admin`.
 
-### 4. Instalar dependencias de Python
+### 4. Crear el entorno virtual e instalar dependencias
+
+Crea el entorno virtual (`.venv`):
+
+```bash
+python3 -m venv .venv
+```
+
+Actívalo:
+
+```bash
+source .venv/bin/activate
+```
+
+> Verás que ahora tu terminal muestra `(.venv)` al principio de la línea.
+
+Instala las dependencias:
 
 ```bash
 pip install -r requirements.txt
@@ -114,7 +130,7 @@ Cada subcategoría incluye 8-10 tags específicos (p. ej. `@Entity y @Table`,
 ### 6. Ejecutar el script principal
 
 ```bash
-python generateArticle.py
+python3 generateArticle.py
 ```
 
 El script:
