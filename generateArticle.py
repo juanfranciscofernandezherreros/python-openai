@@ -12,7 +12,7 @@ from bson import ObjectId
 from openai import OpenAI
 from dotenv import load_dotenv
 from email.message import EmailMessage
-from email.header import Header
+from email import policy
 
 # ============ LOGGING ============
 logging.basicConfig(
@@ -150,8 +150,8 @@ def send_notification_email(subject: str, html_body: str, text_body: str = None)
         print("⚠️  Faltan variables SMTP para enviar el correo. Se omite el envío.")
         return False
     try:
-        msg = EmailMessage()
-        msg["Subject"] = str(Header(subject, "utf-8"))
+        msg = EmailMessage(policy=policy.SMTP)
+        msg["Subject"] = subject
         msg["From"] = FROM_EMAIL
         msg["To"] = TO_EMAIL
         text_body = text_body or "Notificación del proceso."
@@ -160,9 +160,11 @@ def send_notification_email(subject: str, html_body: str, text_body: str = None)
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT,
                           local_hostname="localhost") as smtp:
             smtp.ehlo()
-            smtp.starttls()
+            if smtp.has_extn("STARTTLS"):
+                smtp.starttls()
+                smtp.ehlo()
             smtp.login(SMTP_USER, SMTP_PASS)
-            smtp.send_message(msg)
+            smtp.send_message(msg, mail_options=["SMTPUTF8"])
         print(f"📧 Notificación enviada a {TO_EMAIL}: {subject}")
         return True
     except Exception as e:

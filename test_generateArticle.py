@@ -370,7 +370,7 @@ class TestSendNotificationEmailUtf8:
     @patch("generateArticle.TO_EMAIL", "dest@example.com")
     @patch("generateArticle.smtplib.SMTP")
     def test_subject_uses_header_utf8_encoding(self, mock_smtp_cls):
-        """Subject must use email.header.Header with UTF-8 to avoid ASCII codec errors."""
+        """Subject with non-ASCII chars must be RFC 2047 encoded via policy.SMTP."""
         mock_smtp = MagicMock()
         mock_smtp_cls.return_value.__enter__ = MagicMock(return_value=mock_smtp)
         mock_smtp_cls.return_value.__exit__ = MagicMock(return_value=False)
@@ -384,8 +384,54 @@ class TestSendNotificationEmailUtf8:
 
         msg = mock_smtp.send_message.call_args[0][0]
         raw_subject = msg["Subject"]
-        # After str(Header(..., "utf-8")), the subject is a string with RFC 2047 encoding
+        # policy.SMTP auto-encodes non-ASCII subjects with RFC 2047
         assert isinstance(raw_subject, str)
         # Verify the encoded bytes contain the RFC 2047 UTF-8 marker
         msg_bytes = msg.as_bytes()
         assert b"=?utf-8?" in msg_bytes.lower()
+
+    @patch("generateArticle.SMTP_HOST", "smtp.example.com")
+    @patch("generateArticle.SMTP_PORT", 587)
+    @patch("generateArticle.SMTP_USER", "user@example.com")
+    @patch("generateArticle.SMTP_PASS", "secret")
+    @patch("generateArticle.FROM_EMAIL", "user@example.com")
+    @patch("generateArticle.TO_EMAIL", "dest@example.com")
+    @patch("generateArticle.smtplib.SMTP")
+    def test_send_message_uses_smtputf8_option(self, mock_smtp_cls):
+        """send_message must include SMTPUTF8 mail option for UTF-8 header support."""
+        mock_smtp = MagicMock()
+        mock_smtp_cls.return_value.__enter__ = MagicMock(return_value=mock_smtp)
+        mock_smtp_cls.return_value.__exit__ = MagicMock(return_value=False)
+
+        send_notification_email(
+            subject="[INFO] Conexión exitosa",
+            html_body="<p>OK</p>",
+            text_body="OK",
+        )
+
+        mock_smtp.send_message.assert_called_once()
+        call_kwargs = mock_smtp.send_message.call_args[1]
+        assert call_kwargs.get("mail_options") == ["SMTPUTF8"]
+
+    @patch("generateArticle.SMTP_HOST", "smtp.example.com")
+    @patch("generateArticle.SMTP_PORT", 587)
+    @patch("generateArticle.SMTP_USER", "user@example.com")
+    @patch("generateArticle.SMTP_PASS", "secret")
+    @patch("generateArticle.FROM_EMAIL", "user@example.com")
+    @patch("generateArticle.TO_EMAIL", "dest@example.com")
+    @patch("generateArticle.smtplib.SMTP")
+    def test_starttls_only_when_supported(self, mock_smtp_cls):
+        """STARTTLS must only be called when the server announces the extension."""
+        mock_smtp = MagicMock()
+        mock_smtp.has_extn.return_value = False
+        mock_smtp_cls.return_value.__enter__ = MagicMock(return_value=mock_smtp)
+        mock_smtp_cls.return_value.__exit__ = MagicMock(return_value=False)
+
+        send_notification_email(
+            subject="Test",
+            html_body="<p>body</p>",
+            text_body="body",
+        )
+
+        mock_smtp.has_extn.assert_called_with("STARTTLS")
+        mock_smtp.starttls.assert_not_called()
