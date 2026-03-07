@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" fill="none">
+  <rect width="800" height="450" rx="12" fill="#1e1e1e"/>
+  <text x="400" y="40" text-anchor="middle" font-family="monospace" font-size="18" fill="#4ec9b0">MongoDB — Documento de artículo generado</text>
+  <rect x="30" y="60" width="740" height="370" rx="8" fill="#252526"/>
+  <text x="50" font-family="monospace" font-size="13" fill="#9cdcfe">
+    <tspan x="50" y="90" fill="#569cd6">{</tspan>
+    <tspan x="70" y="112">"_id"</tspan><tspan fill="#d4d4d4">: </tspan><tspan fill="#ce9178">ObjectId("6656…")</tspan><tspan fill="#d4d4d4">,</tspan>
+    <tspan x="70" y="134">"title"</tspan><tspan fill="#d4d4d4">: </tspan><tspan fill="#ce9178">"Cómo usar @Data en Lombok"</tspan><tspan fill="#d4d4d4">,</tspan>
+    <tspan x="70" y="156">"slug"</tspan><tspan fill="#d4d4d4">: </tspan><tspan fill="#ce9178">"como-usar-data-en-lombok"</tspan><tspan fill="#d4d4d4">,</tspan>
+    <tspan x="70" y="178">"status"</tspan><tspan fill="#d4d4d4">: </tspan><tspan fill="#ce9178">"published"</tspan><tspan fill="#d4d4d4">,</tspan>
+    <tspan x="70" y="200">"wordCount"</tspan><tspan fill="#d4d4d4">: </tspan><tspan fill="#b5cea8">1240</tspan><tspan fill="#d4d4d4">,</tspan>
+    <tspan x="70" y="222">"readingTime"</tspan><tspan fill="#d4d4d4">: </tspan><tspan fill="#b5cea8">6</tspan><tspan fill="#d4d4d4">,</tspan>
+    <tspan x="70" y="244">"metaTitle"</tspan><tspan fill="#d4d4d4">: </tspan><tspan fill="#ce9178">"Cómo usar @Data en Lombok"</tspan><tspan fill="#d4d4d4">,</tspan>
+    <tspan x="70" y="266">"canonicalUrl"</tspan><tspan fill="#d4d4d4">: </tspan><tspan fill="#ce9178">"https://tusitio.com/post/como-usar-data-en-lombok"</tspan><tspan fill="#d4d4d4">,</tspan>
+    <tspan x="70" y="288">"ogType"</tspan><tspan fill="#d4d4d4">: </tspan><tspan fill="#ce9178">"article"</tspan><tspan fill="#d4d4d4">,</tspan>
+    <tspan x="70" y="310">"keywords"</tspan><tspan fill="#d4d4d4">: [</tspan><tspan fill="#ce9178">"lombok"</tspan><tspan fill="#d4d4d4">, </tspan><tspan fill="#ce9178">"@data"</tspan><tspan fill="#d4d4d4">, </tspan><tspan fill="#ce9178">"java"</tspan><tspan fill="#d4d4d4">, </tspan><tspan fill="#ce9178">"boilerplate"</tspan><tspan fill="#d4d4d4">],</tspan>
+    <tspan x="70" y="332">"structuredData"</tspan><tspan fill="#d4d4d4">: { </tspan><tspan fill="#ce9178">"@type"</tspan><tspan fill="#d4d4d4">: </tspan><tspan fill="#ce9178">"TechArticle"</tspan><tspan fill="#d4d4d4">, … },</tspan>
+    <tspan x="70" y="354">"publishDate"</tspan><tspan fill="#d4d4d4">: </tspan><tspan fill="#ce9178">ISODate("2025-06-15T08:00:00Z")</tspan>
+    <tspan x="50" y="376" fill="#569cd6">}</tspan>
+  </text>
+  <text x="400" y="440" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#666">Reemplazar con captura real de MongoDB Compass / Atlas</text>
+</svg>

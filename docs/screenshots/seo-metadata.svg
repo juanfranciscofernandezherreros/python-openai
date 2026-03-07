@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="480" fill="none">
+  <rect width="800" height="480" rx="12" fill="#f8fafc"/>
+  <text x="400" y="35" text-anchor="middle" font-family="sans-serif" font-size="18" font-weight="bold" fill="#1e293b">Metadatos SEO del artículo generado</text>
+
+  <!-- Meta Title -->
+  <rect x="30" y="55" width="740" height="62" rx="8" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="50" y="78" font-family="sans-serif" font-size="12" font-weight="bold" fill="#2563eb">META TITLE (≤ 60 chars)</text>
+  <text x="50" y="103" font-family="sans-serif" font-size="16" fill="#1e293b">Cómo usar @Data en Lombok | Guía Spring Boot</text>
+
+  <!-- Meta Description -->
+  <rect x="30" y="127" width="740" height="62" rx="8" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="50" y="150" font-family="sans-serif" font-size="12" font-weight="bold" fill="#2563eb">META DESCRIPTION (≤ 160 chars)</text>
+  <text x="50" y="175" font-family="sans-serif" font-size="14" fill="#475569">Aprende a reducir el código boilerplate con @Data de Lombok en Spring Boot. Guía completa con ejemplos.</text>
+
+  <!-- Canonical URL -->
+  <rect x="30" y="199" width="740" height="52" rx="8" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="50" y="222" font-family="sans-serif" font-size="12" font-weight="bold" fill="#2563eb">CANONICAL URL</text>
+  <text x="50" y="242" font-family="monospace" font-size="13" fill="#059669">https://tusitio.com/post/como-usar-data-en-lombok</text>
+
+  <!-- Open Graph -->
+  <rect x="30" y="261" width="355" height="90" rx="8" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="50" y="284" font-family="sans-serif" font-size="12" font-weight="bold" fill="#ea580c">OPEN GRAPH</text>
+  <text font-family="monospace" font-size="12" fill="#334155">
+    <tspan x="50" y="304">og:title = "Cómo usar @Data en Lombok"</tspan>
+    <tspan x="50" y="322">og:type  = "article"</tspan>
+    <tspan x="50" y="340">og:description = "Aprende a reducir…"</tspan>
+  </text>
+
+  <!-- Keywords -->
+  <rect x="415" y="261" width="355" height="90" rx="8" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="435" y="284" font-family="sans-serif" font-size="12" font-weight="bold" fill="#7c3aed">KEYWORDS (5-7)</text>
+  <text font-family="sans-serif" font-size="13" fill="#334155">
+    <tspan x="435" y="306">lombok · @data · java · boilerplate</tspan>
+    <tspan x="435" y="326">spring boot · pojo · getter setter</tspan>
+  </text>
+
+  <!-- JSON-LD -->
+  <rect x="30" y="361" width="740" height="95" rx="8" fill="#1e1e1e"/>
+  <text x="50" y="384" font-family="sans-serif" font-size="12" font-weight="bold" fill="#4ec9b0">JSON-LD STRUCTURED DATA (Schema.org TechArticle)</text>
+  <text font-family="monospace" font-size="11" fill="#d4d4d4">
+    <tspan x="50" y="404">{ "@context": "https://schema.org", "@type": "TechArticle",</tspan>
+    <tspan x="50" y="420">  "headline": "Cómo usar @Data en Lombok",</tspan>
+    <tspan x="50" y="436">  "author": { "@type": "Person", "name": "adminUser" },</tspan>
+    <tspan x="50" y="452">  "wordCount": 1240, "timeRequired": "PT6M" }</tspan>
+  </text>
+
+  <text x="400" y="476" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#999">Reemplazar con captura real del inspector del navegador</text>
+</svg>

@@ -11,16 +11,20 @@ Sistema de generación y publicación automática de artículos técnicos con in
 - [☸️ Despliegue en Kubernetes](#️-despliegue-en-kubernetes)
 - [☁️ Despliegue en Google Cloud (GCloud)](#️-despliegue-en-google-cloud-gcloud)
 - [📰 ¿Qué es este script?](#-qué-es-este-script)
+- [🏗️ Diagrama de arquitectura](#️-diagrama-de-arquitectura)
 - [🔍 Funcionalidades SEO](#-funcionalidades-seo)
 - [⚙️ ¿Qué necesita para funcionar?](#️-qué-necesita-para-funcionar)
 - [🧩 Cómo organiza los temas: Categorías, Subcategorías y Tags](#-cómo-organiza-los-temas-categorías-subcategorías-y-tags)
 - [🧠 Qué hace paso a paso](#-qué-hace-paso-a-paso)
 - [📄 Documento del artículo generado (campos SEO)](#-documento-del-artículo-generado-campos-seo)
+- [📤 Ejemplo de output generado](#-ejemplo-de-output-generado)
+- [📸 Screenshots](#-screenshots)
 - [📨 Tipos de notificaciones que envía](#-tipos-de-notificaciones-que-envía)
 - [🕐 Frecuencia de publicación](#-frecuencia-de-publicación)
 - [🔒 Seguridad y privacidad](#-seguridad-y-privacidad)
 - [🧾 En resumen](#-en-resumen)
 - [🌟 Ejemplo de funcionamiento real](#-ejemplo-de-funcionamiento-real)
+- [🤝 Contribuir](#-contribuir)
 
 ---
 
@@ -485,6 +489,54 @@ Además, **te avisa por correo electrónico** de todo lo que hace:
 
 ---
 
+## 🏗️ Diagrama de arquitectura
+
+```mermaid
+flowchart TD
+    A["⏰ Scheduler\n(K8s CronJob / Cloud Scheduler)"] -->|"Cada lunes 08:00 Madrid"| B
+    B["🐍 generateArticle.py\n(Script principal)"] --> C["🔍 Validación\n(.env + conexión)"]
+    C --> D["🗄️ MongoDB\n(Categorías, Tags, Artículos)"]
+    D -->|"Consulta tags sin artículo"| E["🎯 Selección de tema\n(pick_fresh_target_strict)"]
+    E --> F["🤖 OpenAI API\n(GPT — generación SEO)"]
+    F -->|"Título + Body + Keywords + FAQ"| G["📝 Post-procesado SEO\n(metaTitle, canonicalUrl,\nJSON-LD, Open Graph)"]
+    G --> H["💾 MongoDB\n(insert artículo publicado)"]
+    H --> I["📧 Notificación email\n(SMTP)"]
+    I --> J["🌐 Blog\n(lee artículos de MongoDB)"]
+
+    style A fill:#f59e0b,stroke:#d97706,color:#000
+    style B fill:#3b82f6,stroke:#2563eb,color:#fff
+    style F fill:#10b981,stroke:#059669,color:#fff
+    style D fill:#6366f1,stroke:#4f46e5,color:#fff
+    style H fill:#6366f1,stroke:#4f46e5,color:#fff
+    style J fill:#ec4899,stroke:#db2777,color:#fff
+```
+
+**Flujo resumido:**
+
+```
+Scheduler (CronJob)
+       ↓
+generateArticle.py
+       ↓
+  ┌─── Validación de entorno ───┐
+  │         ↓                   │
+  │    MongoDB (consulta)       │
+  │         ↓                   │
+  │    Selección de tema        │
+  │         ↓                   │
+  │    OpenAI API (genera)      │
+  │         ↓                   │
+  │    SEO post-procesado       │
+  │         ↓                   │
+  │    MongoDB (guarda)         │
+  │         ↓                   │
+  └─── Email notificación ─────┘
+       ↓
+     Blog (publica)
+```
+
+---
+
 ## 🔍 Funcionalidades SEO
 
 El script implementa múltiples capas de optimización SEO que se aplican automáticamente en cada artículo generado:
@@ -769,6 +821,154 @@ Cada artículo insertado en MongoDB incluye los siguientes campos:
 
 ---
 
+## 📤 Ejemplo de output generado
+
+A continuación se muestra un ejemplo representativo de lo que el script genera para el tag **@Data** (subcategoría: Lombok, categoría: Spring Boot).
+
+### HTML del artículo (body)
+
+```html
+<h1>Cómo usar @Data en Lombok para simplificar tu código Java</h1>
+
+<p>
+  La anotación <strong>@Data</strong> de <em>Lombok</em> es una de las herramientas
+  más potentes para reducir el <strong>código boilerplate</strong> en proyectos
+  <strong>Spring Boot</strong>. En este artículo aprenderás a usarla de forma
+  efectiva.
+</p>
+
+<h2>¿Qué genera @Data?</h2>
+<p>
+  Al anotar una clase con <code>@Data</code>, Lombok genera automáticamente:
+</p>
+<ul>
+  <li><strong>Getters</strong> para todos los campos</li>
+  <li><strong>Setters</strong> para todos los campos no finales</li>
+  <li><strong>toString()</strong></li>
+  <li><strong>equals()</strong> y <strong>hashCode()</strong></li>
+  <li>Un <strong>constructor</strong> con los campos obligatorios</li>
+</ul>
+
+<h2>Ejemplo práctico</h2>
+<pre><code class="language-java">
+import lombok.Data;
+
+@Data
+public class User {
+    private String name;
+    private String email;
+    private int age;
+}
+</code></pre>
+
+<h2>Integración con Spring Boot</h2>
+<p>
+  <strong>@Data</strong> se combina perfectamente con <em>Spring Data JPA</em>.
+  Puedes anotar tus entidades y reducir decenas de líneas de código.
+</p>
+
+<pre><code class="language-java">
+@Data
+@Entity
+@Table(name = "users")
+public class UserEntity {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String username;
+    private String email;
+}
+</code></pre>
+
+<h2>❓ Preguntas frecuentes (FAQ)</h2>
+
+<h3>¿Qué métodos genera @Data exactamente?</h3>
+<p>Genera getters, setters, toString, equals y hashCode de forma automática.</p>
+
+<h3>¿Puedo usar @Data con herencia?</h3>
+<p>
+  Sí, pero se recomienda añadir <code>@EqualsAndHashCode(callSuper = true)</code>
+  para incluir los campos de la clase padre.
+</p>
+
+<h3>¿@Data es compatible con Spring Boot 3?</h3>
+<p>Sí, Lombok es totalmente compatible con Spring Boot 3 y Java 17+.</p>
+
+<h2>Conclusión</h2>
+<p>
+  Usa <strong>@Data</strong> en tus proyectos Spring Boot para escribir menos código
+  y centrarte en la lógica de negocio. Combínalo con <code>@Builder</code> y
+  <code>@Slf4j</code> para una productividad aún mayor.
+</p>
+```
+
+### Metadatos SEO generados
+
+```json
+{
+  "title": "Cómo usar @Data en Lombok para simplificar tu código Java",
+  "slug": "como-usar-data-en-lombok-para-simplificar-tu-codigo-java",
+  "summary": "Aprende a reducir el código boilerplate con @Data de Lombok en Spring Boot. Guía completa con ejemplos.",
+  "keywords": ["lombok", "@data", "java", "boilerplate", "spring boot", "getter setter", "pojo"],
+  "metaTitle": "Cómo usar @Data en Lombok | Guía Spring Boot",
+  "metaDescription": "Aprende a reducir el código boilerplate con @Data de Lombok en Spring Boot. Guía completa con ejemplos.",
+  "canonicalUrl": "https://tusitio.com/post/como-usar-data-en-lombok-para-simplificar-tu-codigo-java",
+  "ogTitle": "Cómo usar @Data en Lombok para simplificar tu código Java",
+  "ogDescription": "Aprende a reducir el código boilerplate con @Data de Lombok en Spring Boot.",
+  "ogType": "article",
+  "wordCount": 1240,
+  "readingTime": 6,
+  "structuredData": {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "Cómo usar @Data en Lombok para simplificar tu código Java",
+    "description": "Aprende a reducir el código boilerplate con @Data de Lombok en Spring Boot.",
+    "author": { "@type": "Person", "name": "adminUser" },
+    "publisher": { "@type": "Organization", "name": "tusitio.com", "url": "https://tusitio.com" },
+    "datePublished": "2025-06-15T08:00:00+00:00",
+    "dateModified": "2025-06-15T08:00:00+00:00",
+    "url": "https://tusitio.com/post/como-usar-data-en-lombok-para-simplificar-tu-codigo-java",
+    "mainEntityOfPage": {
+      "@type": "WebPage",
+      "@id": "https://tusitio.com/post/como-usar-data-en-lombok-para-simplificar-tu-codigo-java"
+    },
+    "wordCount": 1240,
+    "timeRequired": "PT6M",
+    "inLanguage": "es",
+    "keywords": "lombok, @data, java, boilerplate, spring boot, getter setter, pojo",
+    "articleSection": "Lombok"
+  }
+}
+```
+
+---
+
+## 📸 Screenshots
+
+Las siguientes capturas muestran el resultado real del sistema en funcionamiento.
+
+> **Nota:** Reemplaza los placeholders SVG con capturas reales de tu entorno ejecutando el script contra MongoDB y revisando los resultados en tu blog.
+
+### Documento MongoDB
+
+Así se ve un artículo generado en MongoDB Compass / Atlas:
+
+![Documento MongoDB](docs/screenshots/mongodb-document.svg)
+
+### Página del artículo generado
+
+Vista de la página del artículo publicada en el blog con HTML semántico, FAQ y tags:
+
+![Página del artículo generado](docs/screenshots/generated-article-page.svg)
+
+### Metadatos SEO
+
+Metadatos SEO completos del artículo: metaTitle, metaDescription, canonicalUrl, Open Graph, keywords y JSON-LD:
+
+![Metadatos SEO](docs/screenshots/seo-metadata.svg)
+
+---
+
 ## 📨 Tipos de notificaciones que envía
 Durante la ejecución, el script puede mandarte distintos tipos de mensajes por correo:
 
@@ -824,3 +1024,11 @@ Durante la ejecución, el script puede mandarte distintos tipos de mensajes por 
    > Enlace: https://tusitio.com/post/como-simplificar-tu-codigo-con-data-en-lombok
 
 La próxima vez que se ejecute esa misma semana, verá que ya hay uno publicado y **no hará nada más**.
+
+---
+
+## 🤝 Contribuir
+
+Antes de enviar un PR, lee la [Guía de contribución](CONTRIBUTING.md).
+
+> **Regla obligatoria:** Toda contribución que modifique funcionalidad, configuración, flujo de ejecución o estructura del proyecto **DEBE actualizar este `README.md`** de forma acorde. Consulta la tabla detallada en [CONTRIBUTING.md](CONTRIBUTING.md).
