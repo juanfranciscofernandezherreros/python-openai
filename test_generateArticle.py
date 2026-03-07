@@ -338,3 +338,26 @@ class TestSendNotificationEmailUtf8:
         decoded = msg_bytes.decode("utf-8", errors="replace")
         assert "Conexi" in decoded          # subject present
         assert "xico" in decoded or "xito" in decoded or "éxito" in decoded  # body accent preserved
+
+    @patch("generateArticle.SMTP_HOST", "smtp.example.com")
+    @patch("generateArticle.SMTP_PORT", 587)
+    @patch("generateArticle.SMTP_USER", "user@example.com")
+    @patch("generateArticle.SMTP_PASS", "secret")
+    @patch("generateArticle.FROM_EMAIL", "user@example.com")
+    @patch("generateArticle.TO_EMAIL", "dest@example.com")
+    @patch("generateArticle.smtplib.SMTP")
+    def test_smtp_uses_localhost_hostname(self, mock_smtp_cls):
+        """SMTP must use local_hostname='localhost' to avoid non-ASCII FQDN encoding errors."""
+        mock_smtp = MagicMock()
+        mock_smtp_cls.return_value.__enter__ = MagicMock(return_value=mock_smtp)
+        mock_smtp_cls.return_value.__exit__ = MagicMock(return_value=False)
+
+        send_notification_email(
+            subject="Test subject",
+            html_body="<p>body</p>",
+            text_body="body",
+        )
+
+        mock_smtp_cls.assert_called_once_with(
+            "smtp.example.com", 587, local_hostname="localhost"
+        )

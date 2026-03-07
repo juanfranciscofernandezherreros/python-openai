@@ -148,15 +148,16 @@ def send_notification_email(subject: str, html_body: str, text_body: str = None)
     if not all([SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, FROM_EMAIL, TO_EMAIL]):
         print("⚠️  Faltan variables SMTP para enviar el correo. Se omite el envío.")
         return False
-    msg = EmailMessage()
-    msg["Subject"] = subject
-    msg["From"] = FROM_EMAIL
-    msg["To"] = TO_EMAIL
-    text_body = text_body or "Notificación del proceso."
-    msg.set_content(text_body, charset="utf-8")
-    msg.add_alternative(html_body, subtype="html", charset="utf-8")
     try:
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as smtp:
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = FROM_EMAIL
+        msg["To"] = TO_EMAIL
+        text_body = text_body or "Notificación del proceso."
+        msg.set_content(text_body, charset="utf-8")
+        msg.add_alternative(html_body, subtype="html", charset="utf-8")
+        with smtplib.SMTP(SMTP_HOST, int(SMTP_PORT),
+                          local_hostname="localhost") as smtp:
             smtp.ehlo()
             smtp.starttls()
             smtp.login(SMTP_USER, SMTP_PASS)
