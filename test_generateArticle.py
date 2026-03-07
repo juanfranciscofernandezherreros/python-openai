@@ -361,3 +361,31 @@ class TestSendNotificationEmailUtf8:
         mock_smtp_cls.assert_called_once_with(
             "smtp.example.com", 587, local_hostname="localhost"
         )
+
+    @patch("generateArticle.SMTP_HOST", "smtp.example.com")
+    @patch("generateArticle.SMTP_PORT", 587)
+    @patch("generateArticle.SMTP_USER", "user@example.com")
+    @patch("generateArticle.SMTP_PASS", "secret")
+    @patch("generateArticle.FROM_EMAIL", "user@example.com")
+    @patch("generateArticle.TO_EMAIL", "dest@example.com")
+    @patch("generateArticle.smtplib.SMTP")
+    def test_subject_uses_header_utf8_encoding(self, mock_smtp_cls):
+        """Subject must use email.header.Header with UTF-8 to avoid ASCII codec errors."""
+        mock_smtp = MagicMock()
+        mock_smtp_cls.return_value.__enter__ = MagicMock(return_value=mock_smtp)
+        mock_smtp_cls.return_value.__exit__ = MagicMock(return_value=False)
+
+        subject = "Límite semanal alcanzado — ejecución automática"
+        send_notification_email(
+            subject=subject,
+            html_body="<p>Contenido</p>",
+            text_body="Contenido",
+        )
+
+        msg = mock_smtp.send_message.call_args[0][0]
+        raw_subject = msg["Subject"]
+        # After str(Header(..., "utf-8")), the subject is a string with RFC 2047 encoding
+        assert isinstance(raw_subject, str)
+        # Verify the encoded bytes contain the RFC 2047 UTF-8 marker
+        msg_bytes = msg.as_bytes()
+        assert b"=?utf-8?" in msg_bytes.lower()

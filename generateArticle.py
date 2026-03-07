@@ -12,6 +12,7 @@ from bson import ObjectId
 from openai import OpenAI
 from dotenv import load_dotenv
 from email.message import EmailMessage
+from email.header import Header
 
 # ============ LOGGING ============
 logging.basicConfig(
@@ -150,7 +151,7 @@ def send_notification_email(subject: str, html_body: str, text_body: str = None)
         return False
     try:
         msg = EmailMessage()
-        msg["Subject"] = subject
+        msg["Subject"] = str(Header(subject, "utf-8"))
         msg["From"] = FROM_EMAIL
         msg["To"] = TO_EMAIL
         text_body = text_body or "Notificación del proceso."
