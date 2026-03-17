@@ -13,6 +13,9 @@ from openai import OpenAI
 from dotenv import load_dotenv
 from email.message import EmailMessage
 from email.header import Header
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
 
 # ============ LOGGING ============
 logging.basicConfig(
@@ -708,47 +711,66 @@ def _safe_json_loads(s: str) -> dict:
         s2 = s.replace("\u201c", "\"").replace("\u201d", "\"").replace("\u2019", "'")
         return json.loads(s2)
 
+def _generate_with_langchain(
+    system_msg: str,
+    user_prompt: str,
+    max_tokens: int,
+    temperature: float = 0.7,
+) -> str:
+    """
+    Invoca el modelo de lenguaje mediante LangChain (ChatOpenAI + LCEL).
+    Devuelve el texto generado como string.
+    Lanza RuntimeError si la llamada falla o no devuelve contenido.
+    """
+    llm = ChatOpenAI(
+        model=OPENAI_MODEL,
+        api_key=OPENAIAPIKEY,
+        max_tokens=max_tokens,
+        temperature=temperature,
+    )
+    prompt_template = ChatPromptTemplate.from_messages([
+        ("system", system_msg),
+        ("human", "{user_prompt}"),
+    ])
+    chain = prompt_template | llm | StrOutputParser()
+    result = chain.invoke({"user_prompt": user_prompt})
+    if not result:
+        raise RuntimeError("LangChain no devolvió contenido.")
+    return result
+
 def generate_article_with_ai(client_ai: OpenAI, parent_name: str, subcat_name: str, tag_text: str, avoid_titles: Optional[List[str]] = None, language: str = ARTICLE_LANGUAGE) -> Tuple[str, str, str, List[str]]:
     """
-    Llama a OpenAI para generar el artículo. Devuelve (title, summary, body, keywords).
-    Soporta SDK nuevo (responses.create) y el anterior (chat.completions.create).
+    Genera el artículo usando LangChain (ChatOpenAI). Devuelve (title, summary, body, keywords).
+    Usa el SDK de OpenAI directamente como fallback si LangChain falla.
     Incluye reintentos con back-off exponencial para errores transitorios.
     """
-    prompt = build_generation_prompt(parent_name, subcat_name, tag_text, avoid_titles=avoid_titles, language=language)
+    user_prompt = build_generation_prompt(parent_name, subcat_name, tag_text, avoid_titles=avoid_titles, language=language)
 
     raw_text = None
 
-    # 1) Intento con API moderna (Responses) — con reintentos
-    def _call_responses():
-        resp = client_ai.responses.create(
-            model=OPENAI_MODEL,
-            instructions=GENERATION_SYSTEM_MSG,
-            input=prompt,
-            max_output_tokens=OPENAI_MAX_ARTICLE_TOKENS,
+    # 1) Intento con LangChain — con reintentos
+    def _call_langchain_article():
+        return _generate_with_langchain(
+            GENERATION_SYSTEM_MSG,
+            user_prompt,
+            max_tokens=OPENAI_MAX_ARTICLE_TOKENS,
+            temperature=0.7,
         )
-        text = getattr(resp, "output_text", None)
-        if not text and hasattr(resp, "content") and resp.content:
-            for c in resp.content:
-                if getattr(c, "type", None) in (None, "output_text"):
-                    text = getattr(c, "text", None)
-                    if text:
-                        break
-        return text
 
     try:
-        raw_text = _retry_with_backoff(_call_responses)
+        raw_text = _retry_with_backoff(_call_langchain_article)
     except Exception:
-        logger.info("API Responses no disponible; usando Chat Completions como fallback.")
+        logger.info("LangChain no disponible para artículo; usando OpenAI SDK como fallback.")
         raw_text = None
 
-    # 2) Fallback: Chat Completions — con reintentos
+    # 2) Fallback: OpenAI SDK Chat Completions — con reintentos
     if not raw_text:
         def _call_chat():
             chat = client_ai.chat.completions.create(
                 model=OPENAI_MODEL,
                 messages=[
                     {"role": "system", "content": GENERATION_SYSTEM_MSG},
-                    {"role": "user", "content": prompt},
+                    {"role": "user", "content": user_prompt},
                 ],
                 temperature=0.7,
                 max_tokens=OPENAI_MAX_ARTICLE_TOKENS,
@@ -788,41 +810,36 @@ def generate_article_with_ai(client_ai: OpenAI, parent_name: str, subcat_name: s
 
 def generate_title_with_ai(client_ai: OpenAI, parent_name: str, subcat_name: str, tag_text: str, avoid_titles: Optional[List[str]] = None, language: str = ARTICLE_LANGUAGE) -> str:
     """
-    Genera únicamente el título del artículo con una llamada ligera a OpenAI.
+    Genera únicamente el título del artículo usando LangChain (ChatOpenAI).
+    Usa el SDK de OpenAI directamente como fallback si LangChain falla.
     Mucho más económico que regenerar el artículo completo en cada reintento.
     """
-    prompt = build_title_prompt(parent_name, subcat_name, tag_text, avoid_titles=avoid_titles, language=language)
+    user_prompt = build_title_prompt(parent_name, subcat_name, tag_text, avoid_titles=avoid_titles, language=language)
     raw_text = None
 
-    def _call_responses():
-        resp = client_ai.responses.create(
-            model=OPENAI_MODEL,
-            instructions=TITLE_SYSTEM_MSG,
-            input=prompt,
-            max_output_tokens=OPENAI_MAX_TITLE_TOKENS,
+    # 1) Intento con LangChain — con reintentos
+    def _call_langchain_title():
+        return _generate_with_langchain(
+            TITLE_SYSTEM_MSG,
+            user_prompt,
+            max_tokens=OPENAI_MAX_TITLE_TOKENS,
+            temperature=0.9,
         )
-        text = getattr(resp, "output_text", None)
-        if not text and hasattr(resp, "content") and resp.content:
-            for c in resp.content:
-                if getattr(c, "type", None) in (None, "output_text"):
-                    text = getattr(c, "text", None)
-                    if text:
-                        break
-        return text
 
     try:
-        raw_text = _retry_with_backoff(_call_responses)
+        raw_text = _retry_with_backoff(_call_langchain_title)
     except Exception:
-        logger.info("API Responses no disponible; usando Chat Completions para título.")
+        logger.info("LangChain no disponible para título; usando OpenAI SDK como fallback.")
         raw_text = None
 
+    # 2) Fallback: OpenAI SDK Chat Completions — con reintentos
     if not raw_text:
         def _call_chat():
             chat = client_ai.chat.completions.create(
                 model=OPENAI_MODEL,
                 messages=[
                     {"role": "system", "content": TITLE_SYSTEM_MSG},
-                    {"role": "user", "content": prompt},
+                    {"role": "user", "content": user_prompt},
                 ],
                 temperature=0.9,
                 max_tokens=OPENAI_MAX_TITLE_TOKENS,

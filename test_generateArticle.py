@@ -25,6 +25,9 @@ from generateArticle import (
     _extract_json_block,
     _safe_json_loads,
     _language_name,
+    _generate_with_langchain,
+    generate_article_with_ai,
+    generate_title_with_ai,
     SIMILARITY_THRESHOLD_DEFAULT,
     SIMILARITY_THRESHOLD_STRICT,
     MAX_TITLE_RETRIES,
@@ -664,3 +667,186 @@ class TestMultiLanguagePrompts:
     def test_title_prompt_german_language(self):
         prompt = build_title_prompt("Cat", "Sub", "Tag", language="de")
         assert "alemán" in prompt
+
+
+# ---- LangChain integration: _generate_with_langchain ----
+class TestGenerateWithLangchain:
+    """Tests for the LangChain-based text generation helper."""
+
+    @patch("generateArticle.ChatOpenAI")
+    @patch("generateArticle.StrOutputParser")
+    @patch("generateArticle.ChatPromptTemplate")
+    def test_returns_content_from_chain(self, mock_template, mock_parser, mock_llm):
+        """_generate_with_langchain should return the string produced by the LCEL chain."""
+        fake_chain = MagicMock()
+        fake_chain.invoke.return_value = '{"title":"T","summary":"S","body":"<h1>T</h1>","keywords":[]}'
+        # Wire up the pipe operators: prompt_template | llm | parser
+        mock_template.from_messages.return_value.__or__ = MagicMock(return_value=MagicMock(
+            __or__=MagicMock(return_value=fake_chain)
+        ))
+        result = _generate_with_langchain("system", "user prompt", max_tokens=100)
+        assert result == '{"title":"T","summary":"S","body":"<h1>T</h1>","keywords":[]}'
+
+    @patch("generateArticle.ChatOpenAI")
+    @patch("generateArticle.StrOutputParser")
+    @patch("generateArticle.ChatPromptTemplate")
+    def test_raises_when_chain_returns_empty(self, mock_template, mock_parser, mock_llm):
+        """_generate_with_langchain should raise RuntimeError when the chain returns empty string."""
+        fake_chain = MagicMock()
+        fake_chain.invoke.return_value = ""
+        mock_template.from_messages.return_value.__or__ = MagicMock(return_value=MagicMock(
+            __or__=MagicMock(return_value=fake_chain)
+        ))
+        with pytest.raises(RuntimeError):
+            _generate_with_langchain("system", "user prompt", max_tokens=100)
+
+    @patch("generateArticle.ChatOpenAI")
+    def test_llm_uses_correct_model_and_tokens(self, mock_llm_cls):
+        """ChatOpenAI should be constructed with the configured model and max_tokens."""
+        import generateArticle
+        mock_llm_instance = MagicMock()
+        mock_llm_cls.return_value = mock_llm_instance
+
+        with patch("generateArticle.ChatPromptTemplate") as mock_template, \
+             patch("generateArticle.StrOutputParser") as mock_parser:
+            fake_chain = MagicMock()
+            fake_chain.invoke.return_value = "some content"
+            mock_template.from_messages.return_value.__or__ = MagicMock(return_value=MagicMock(
+                __or__=MagicMock(return_value=fake_chain)
+            ))
+            _generate_with_langchain("sys", "user", max_tokens=512, temperature=0.5)
+
+        call_kwargs = mock_llm_cls.call_args[1]
+        assert call_kwargs["max_tokens"] == 512
+        assert call_kwargs["temperature"] == 0.5
+
+
+# ---- LangChain integration: generate_article_with_ai (LangChain primary path) ----
+_VALID_ARTICLE_JSON = json.dumps({
+    "title": "Cómo usar Spring Boot",
+    "summary": "Guía completa de Spring Boot.",
+    "body": "<h1>Cómo usar Spring Boot</h1><p>Introducción.</p>",
+    "keywords": ["spring boot", "java"],
+})
+
+
+class TestGenerateArticleWithAILangchain:
+    """Tests for generate_article_with_ai using the LangChain primary path."""
+
+    @patch("generateArticle._generate_with_langchain", return_value=_VALID_ARTICLE_JSON)
+    def test_uses_langchain_primary_path(self, mock_lc):
+        """When LangChain succeeds the OpenAI SDK should not be called."""
+        mock_client = MagicMock()
+        title, summary, body, keywords = generate_article_with_ai(
+            mock_client, "Spring Boot", "Core", "Spring Boot"
+        )
+        mock_lc.assert_called_once()
+        mock_client.chat.completions.create.assert_not_called()
+
+    @patch("generateArticle._generate_with_langchain", return_value=_VALID_ARTICLE_JSON)
+    def test_returns_tuple_of_four(self, mock_lc):
+        mock_client = MagicMock()
+        result = generate_article_with_ai(mock_client, "Cat", "Sub", "Tag")
+        assert len(result) == 4
+
+    @patch("generateArticle._generate_with_langchain", return_value=_VALID_ARTICLE_JSON)
+    def test_title_and_body_populated(self, mock_lc):
+        mock_client = MagicMock()
+        title, summary, body, keywords = generate_article_with_ai(mock_client, "Cat", "Sub", "Tag")
+        assert title == "Cómo usar Spring Boot"
+        assert "<h1>" in body
+
+    @patch("generateArticle._generate_with_langchain", return_value=_VALID_ARTICLE_JSON)
+    def test_keywords_returned_as_list(self, mock_lc):
+        mock_client = MagicMock()
+        _, _, _, keywords = generate_article_with_ai(mock_client, "Cat", "Sub", "Tag")
+        assert isinstance(keywords, list)
+        assert "spring boot" in keywords
+
+    @patch("generateArticle._generate_with_langchain", return_value=_VALID_ARTICLE_JSON)
+    def test_h1_injected_when_missing_in_body(self, mock_lc):
+        """If the body from the model lacks <h1>, one is prepended from the title."""
+        json_no_h1 = json.dumps({
+            "title": "Mi título",
+            "summary": "Resumen",
+            "body": "<p>Sin h1 aquí.</p>",
+            "keywords": [],
+        })
+        mock_lc.return_value = json_no_h1
+        mock_client = MagicMock()
+        _, _, body, _ = generate_article_with_ai(mock_client, "Cat", "Sub", "Tag")
+        assert body.startswith("<h1>Mi título</h1>")
+
+    @patch("generateArticle._generate_with_langchain", side_effect=RuntimeError("LangChain error"))
+    def test_falls_back_to_openai_sdk_on_langchain_failure(self, mock_lc):
+        """When LangChain raises, the OpenAI SDK fallback must be invoked."""
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content=_VALID_ARTICLE_JSON))]
+        )
+        title, _, _, _ = generate_article_with_ai(mock_client, "Cat", "Sub", "Tag")
+        assert title == "Cómo usar Spring Boot"
+        mock_client.chat.completions.create.assert_called_once()
+
+    @patch("generateArticle._generate_with_langchain", side_effect=RuntimeError("fail"))
+    def test_raises_if_both_langchain_and_sdk_fail(self, mock_lc):
+        """RuntimeError is raised when both LangChain and the OpenAI SDK fallback fail."""
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.side_effect = RuntimeError("SDK also failed")
+        with pytest.raises(RuntimeError):
+            generate_article_with_ai(mock_client, "Cat", "Sub", "Tag")
+
+    @patch("generateArticle._generate_with_langchain", return_value='{"title":"","body":"","summary":"","keywords":[]}')
+    def test_raises_on_empty_title_or_body(self, mock_lc):
+        """ValueError raised when the model returns empty title or body."""
+        mock_client = MagicMock()
+        with pytest.raises(ValueError):
+            generate_article_with_ai(mock_client, "Cat", "Sub", "Tag")
+
+
+# ---- LangChain integration: generate_title_with_ai (LangChain primary path) ----
+class TestGenerateTitleWithAILangchain:
+    """Tests for generate_title_with_ai using the LangChain primary path."""
+
+    @patch("generateArticle._generate_with_langchain", return_value="Título generado con LangChain")
+    def test_uses_langchain_primary_path(self, mock_lc):
+        """When LangChain succeeds the OpenAI SDK should not be called."""
+        mock_client = MagicMock()
+        title = generate_title_with_ai(mock_client, "Cat", "Sub", "Tag")
+        mock_lc.assert_called_once()
+        mock_client.chat.completions.create.assert_not_called()
+
+    @patch("generateArticle._generate_with_langchain", return_value='  "Mi Título"  ')
+    def test_strips_whitespace_and_quotes(self, mock_lc):
+        """generate_title_with_ai strips surrounding whitespace and ASCII quote characters."""
+        mock_client = MagicMock()
+        title = generate_title_with_ai(mock_client, "Cat", "Sub", "Tag")
+        assert not title.startswith(" ")
+        assert not title.endswith(" ")
+        assert not title.startswith('"')
+        assert not title.endswith('"')
+
+    @patch("generateArticle._generate_with_langchain", return_value="A" * 200)
+    def test_truncates_to_meta_title_max_length(self, mock_lc):
+        mock_client = MagicMock()
+        title = generate_title_with_ai(mock_client, "Cat", "Sub", "Tag")
+        assert len(title) <= META_TITLE_MAX_LENGTH
+
+    @patch("generateArticle._generate_with_langchain", side_effect=RuntimeError("LangChain error"))
+    def test_falls_back_to_openai_sdk_on_langchain_failure(self, mock_lc):
+        """When LangChain raises, the OpenAI SDK fallback must be invoked."""
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content="Título fallback"))]
+        )
+        title = generate_title_with_ai(mock_client, "Cat", "Sub", "Tag")
+        assert "Título fallback" in title
+        mock_client.chat.completions.create.assert_called_once()
+
+    @patch("generateArticle._generate_with_langchain", side_effect=RuntimeError("fail"))
+    def test_raises_if_both_langchain_and_sdk_fail(self, mock_lc):
+        """RuntimeError is raised when both LangChain and the OpenAI SDK fallback fail."""
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.side_effect = RuntimeError("SDK also failed")
+        with pytest.raises(RuntimeError):
+            generate_title_with_ai(mock_client, "Cat", "Sub", "Tag")
