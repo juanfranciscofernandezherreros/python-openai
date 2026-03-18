@@ -2,6 +2,8 @@
 """Tests for pure helper functions in generateArticle.py."""
 
 import json
+import os
+import tempfile
 from unittest.mock import patch, MagicMock
 import pytest
 
@@ -14,6 +16,7 @@ from generateArticle import (
     count_words,
     estimate_reading_time,
     extract_plain_text,
+    generate_and_save_article,
     html_escape,
     is_too_similar,
     normalize_for_similarity,
@@ -978,3 +981,291 @@ class TestGeminiNoOpenAIFallback:
         with pytest.raises(RuntimeError):
             generate_title_with_ai(mock_client, "Cat", "Sub", "Tag")
         mock_client.chat.completions.create.assert_not_called()
+
+
+# ---- generate_and_save_article ----
+_VALID_JSON = json.dumps({
+    "title": "Guía de Spring Boot",
+    "summary": "Introducción a Spring Boot.",
+    "body": "<h1>Guía de Spring Boot</h1><p>Contenido.</p>",
+    "keywords": ["spring boot", "java"],
+})
+
+
+class TestGenerateAndSaveArticle:
+    """Tests for generate_and_save_article: JSON output and document structure."""
+
+    @patch("generateArticle._generate_with_langchain", return_value=_VALID_JSON)
+    def test_returns_true_on_success(self, mock_lc):
+        """generate_and_save_article returns True when the article is successfully saved."""
+        mock_client = MagicMock()
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            path = tmp.name
+        try:
+            result = generate_and_save_article(
+                mock_client, "Spring Boot", "Spring Boot", "Spring Boot Core",
+                output_path=path,
+            )
+            assert result is True
+        finally:
+            os.unlink(path)
+
+    @patch("generateArticle._generate_with_langchain", return_value=_VALID_JSON)
+    def test_creates_json_file(self, mock_lc):
+        """generate_and_save_article writes a valid JSON file to the given output path."""
+        mock_client = MagicMock()
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            path = tmp.name
+        try:
+            generate_and_save_article(
+                mock_client, "Spring Boot", "Spring Boot", "Spring Boot Core",
+                output_path=path,
+            )
+            assert os.path.isfile(path)
+            with open(path, encoding="utf-8") as f:
+                doc = json.load(f)
+            assert isinstance(doc, dict)
+        finally:
+            os.unlink(path)
+
+    @patch("generateArticle._generate_with_langchain", return_value=_VALID_JSON)
+    def test_json_contains_required_fields(self, mock_lc):
+        """The exported JSON must contain all required article fields."""
+        mock_client = MagicMock()
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            path = tmp.name
+        try:
+            generate_and_save_article(
+                mock_client, "Spring Boot", "Categoría", "Subcategoría",
+                output_path=path,
+            )
+            with open(path, encoding="utf-8") as f:
+                doc = json.load(f)
+            for field in ("title", "slug", "summary", "body", "category", "tags",
+                          "author", "status", "keywords", "metaTitle", "metaDescription",
+                          "canonicalUrl", "structuredData", "wordCount", "readingTime"):
+                assert field in doc, f"Campo '{field}' no encontrado en el JSON"
+        finally:
+            os.unlink(path)
+
+    @patch("generateArticle._generate_with_langchain", return_value=_VALID_JSON)
+    def test_tag_stored_as_string(self, mock_lc):
+        """Tags in the JSON output are stored as strings, not ObjectIds."""
+        mock_client = MagicMock()
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            path = tmp.name
+        try:
+            generate_and_save_article(
+                mock_client, "Spring Boot", "Cat", "Sub",
+                output_path=path,
+            )
+            with open(path, encoding="utf-8") as f:
+                doc = json.load(f)
+            assert isinstance(doc["tags"], list)
+            for t in doc["tags"]:
+                assert isinstance(t, str)
+        finally:
+            os.unlink(path)
+
+    @patch("generateArticle._generate_with_langchain", return_value=_VALID_JSON)
+    def test_category_stored_as_string(self, mock_lc):
+        """Category in the JSON output is stored as a string, not an ObjectId."""
+        mock_client = MagicMock()
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            path = tmp.name
+        try:
+            generate_and_save_article(
+                mock_client, "Spring Boot", "Cat", "MiSubcategoría",
+                output_path=path,
+            )
+            with open(path, encoding="utf-8") as f:
+                doc = json.load(f)
+            assert isinstance(doc["category"], str)
+            assert doc["category"] == "MiSubcategoría"
+        finally:
+            os.unlink(path)
+
+    @patch("generateArticle._generate_with_langchain", return_value=_VALID_JSON)
+    def test_author_passed_correctly(self, mock_lc):
+        """The author name passed as argument is stored in the JSON document."""
+        mock_client = MagicMock()
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            path = tmp.name
+        try:
+            generate_and_save_article(
+                mock_client, "Spring Boot", "Cat", "Sub",
+                author_name="testAuthor",
+                output_path=path,
+            )
+            with open(path, encoding="utf-8") as f:
+                doc = json.load(f)
+            assert doc["author"] == "testAuthor"
+        finally:
+            os.unlink(path)
+
+    @patch("generateArticle._generate_with_langchain", return_value=_VALID_JSON)
+    def test_slug_derived_from_title(self, mock_lc):
+        """The slug in the JSON is derived from the article title."""
+        mock_client = MagicMock()
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            path = tmp.name
+        try:
+            generate_and_save_article(
+                mock_client, "Spring Boot", "Cat", "Sub",
+                output_path=path,
+            )
+            with open(path, encoding="utf-8") as f:
+                doc = json.load(f)
+            assert doc["slug"] == slugify(doc["title"])
+        finally:
+            os.unlink(path)
+
+    @patch("generateArticle._generate_with_langchain", return_value=_VALID_JSON)
+    def test_structured_data_is_schema_org(self, mock_lc):
+        """The structuredData field must conform to Schema.org TechArticle."""
+        mock_client = MagicMock()
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            path = tmp.name
+        try:
+            generate_and_save_article(
+                mock_client, "Spring Boot", "Cat", "Sub",
+                output_path=path,
+            )
+            with open(path, encoding="utf-8") as f:
+                doc = json.load(f)
+            sd = doc["structuredData"]
+            assert sd["@context"] == "https://schema.org"
+            assert sd["@type"] == "TechArticle"
+        finally:
+            os.unlink(path)
+
+    @patch("generateArticle._generate_with_langchain", side_effect=RuntimeError("AI fail"))
+    def test_raises_on_ai_failure(self, mock_lc):
+        """generate_and_save_article raises RuntimeError when AI generation fails."""
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.side_effect = RuntimeError("SDK fail")
+        with pytest.raises(RuntimeError):
+            generate_and_save_article(
+                mock_client, "Spring Boot", "Cat", "Sub",
+                output_path="/tmp/should_not_be_created.json",
+            )
+
+    @patch("generateArticle._generate_with_langchain", return_value=_VALID_JSON)
+    def test_json_is_utf8_encoded(self, mock_lc):
+        """The JSON file must be valid UTF-8 and non-ASCII chars appear unescaped."""
+        mock_client = MagicMock()
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            path = tmp.name
+        try:
+            generate_and_save_article(
+                mock_client, "Spring Böot", "Categoría", "Subcategoría",
+                output_path=path,
+            )
+            with open(path, encoding="utf-8") as f:
+                raw = f.read()
+            # ensure_ascii=False means accented chars should appear literally
+            assert "Subcategor" in raw
+        finally:
+            os.unlink(path)
+
+
+# ---- CLI: main() argparse ----
+class TestMainCli:
+    """Tests for the argparse-based main() function."""
+
+    @patch("generateArticle.generate_and_save_article", return_value=True)
+    @patch("generateArticle.OpenAI")
+    @patch("generateArticle.OPENAIAPIKEY", "fake-key")
+    @patch("generateArticle.OPENAI_MODEL", "gpt-4o")
+    def test_main_calls_generate_with_tag_arg(self, mock_openai_cls, mock_gen):
+        """main() must call generate_and_save_article with the --tag argument."""
+        import sys
+        from generateArticle import main
+        with patch.object(sys, "argv", ["generateArticle.py", "--tag", "Spring Boot"]):
+            main()
+        mock_gen.assert_called_once()
+        _, kwargs = mock_gen.call_args
+        assert kwargs["tag_text"] == "Spring Boot"
+
+    @patch("generateArticle.generate_and_save_article", return_value=True)
+    @patch("generateArticle.OpenAI")
+    @patch("generateArticle.OPENAIAPIKEY", "fake-key")
+    @patch("generateArticle.OPENAI_MODEL", "gpt-4o")
+    def test_main_passes_category_and_subcategory(self, mock_openai_cls, mock_gen):
+        """main() must pass --category and --subcategory to generate_and_save_article."""
+        import sys
+        from generateArticle import main
+        with patch.object(sys, "argv", [
+            "generateArticle.py",
+            "--tag", "Lombok",
+            "--category", "Spring Boot",
+            "--subcategory", "Lombok",
+        ]):
+            main()
+        _, kwargs = mock_gen.call_args
+        assert kwargs["parent_name"] == "Spring Boot"
+        assert kwargs["subcat_name"] == "Lombok"
+
+    @patch("generateArticle.generate_and_save_article", return_value=True)
+    @patch("generateArticle.OpenAI")
+    @patch("generateArticle.OPENAIAPIKEY", "fake-key")
+    @patch("generateArticle.OPENAI_MODEL", "gpt-4o")
+    def test_main_passes_output_path(self, mock_openai_cls, mock_gen):
+        """main() must pass the --output argument as output_path."""
+        import sys
+        from generateArticle import main
+        with patch.object(sys, "argv", [
+            "generateArticle.py",
+            "--tag", "Lombok",
+            "--output", "/tmp/test_output.json",
+        ]):
+            main()
+        _, kwargs = mock_gen.call_args
+        assert kwargs["output_path"] == "/tmp/test_output.json"
+
+    @patch("generateArticle.generate_and_save_article", return_value=True)
+    @patch("generateArticle.OpenAI")
+    @patch("generateArticle.OPENAIAPIKEY", "fake-key")
+    @patch("generateArticle.OPENAI_MODEL", "gpt-4o")
+    def test_main_passes_language(self, mock_openai_cls, mock_gen):
+        """main() must pass the --language argument to generate_and_save_article."""
+        import sys
+        from generateArticle import main
+        with patch.object(sys, "argv", [
+            "generateArticle.py",
+            "--tag", "Lombok",
+            "--language", "en",
+        ]):
+            main()
+        _, kwargs = mock_gen.call_args
+        assert kwargs["language"] == "en"
+
+    @patch("generateArticle.generate_and_save_article", return_value=True)
+    @patch("generateArticle.OpenAI")
+    @patch("generateArticle.OPENAIAPIKEY", "fake-key")
+    @patch("generateArticle.OPENAI_MODEL", "gpt-4o")
+    def test_main_parses_avoid_titles(self, mock_openai_cls, mock_gen):
+        """main() must parse semicolon-separated --avoid-titles into a list."""
+        import sys
+        from generateArticle import main
+        with patch.object(sys, "argv", [
+            "generateArticle.py",
+            "--tag", "Lombok",
+            "--avoid-titles", "Título A;Título B",
+        ]):
+            main()
+        _, kwargs = mock_gen.call_args
+        assert "Título A" in kwargs["avoid_titles"]
+        assert "Título B" in kwargs["avoid_titles"]
+
+    @patch("generateArticle.OPENAIAPIKEY", "")
+    @patch("generateArticle.GEMINI_API_KEY", "")
+    @patch("generateArticle.OPENAI_MODEL", "gpt-4o")
+    def test_main_exits_when_no_api_key(self):
+        """main() must exit with code 1 when no API key is configured."""
+        import sys
+        from generateArticle import main
+        with patch.object(sys, "argv", ["generateArticle.py", "--tag", "Lombok"]):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+        assert exc_info.value.code == 1
