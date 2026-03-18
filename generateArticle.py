@@ -5,7 +5,7 @@ import os, sys, json, random, re, unicodedata, difflib, logging
 import smtplib
 import time as _time
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from openai import OpenAI
 from dotenv import load_dotenv
 from email.message import EmailMessage
@@ -380,6 +380,34 @@ def _is_gemini_model(model: str) -> bool:
     """Devuelve True si el nombre de modelo corresponde a un modelo de Google Gemini."""
     return model.lower().startswith("gemini")
 
+
+class LLMChain:
+    """
+    Cadena que combina un ChatPromptTemplate con un modelo de lenguaje (LLM).
+    Implementa el patrón LLMChain usando LCEL (LangChain Expression Language):
+      prompt | llm | StrOutputParser()
+    Uso:
+        chain = LLMChain(llm=llm, prompt=prompt_template)
+        result = chain.run(user_prompt="Escribe un artículo sobre Python")
+    """
+
+    def __init__(self, llm: Union["ChatOpenAI", "ChatGoogleGenerativeAI"], prompt: ChatPromptTemplate) -> None:
+        self._chain = prompt | llm | StrOutputParser()
+
+    def run(self, **input_variables) -> str:
+        """Ejecuta la cadena con las variables del prompt y devuelve el texto generado."""
+        return self._chain.invoke(input_variables)
+
+    def invoke(self, input_dict: Dict[str, Any]) -> str:
+        """Ejecuta la cadena con un diccionario de variables del prompt y devuelve el texto generado.
+
+        Args:
+            input_dict: Diccionario con las variables definidas en el ChatPromptTemplate,
+                        por ejemplo ``{"user_prompt": "Escribe un artículo sobre Python"}``.
+        """
+        return self._chain.invoke(input_dict)
+
+
 def _generate_with_langchain(
     system_msg: str,
     user_prompt: str,
@@ -387,7 +415,7 @@ def _generate_with_langchain(
     temperature: float = 0.7,
 ) -> str:
     """
-    Invoca el modelo de lenguaje mediante LangChain (LCEL).
+    Invoca el modelo de lenguaje mediante LangChain usando LLMChain.
     Usa ChatGoogleGenerativeAI para modelos Gemini y ChatOpenAI para modelos OpenAI/ChatGPT.
     Devuelve el texto generado como string.
     Lanza RuntimeError si la llamada falla o no devuelve contenido.
@@ -410,8 +438,8 @@ def _generate_with_langchain(
         ("system", system_msg),
         ("human", "{user_prompt}"),
     ])
-    chain = prompt_template | llm | StrOutputParser()
-    result = chain.invoke({"user_prompt": user_prompt})
+    chain = LLMChain(llm=llm, prompt=prompt_template)
+    result = chain.run(user_prompt=user_prompt)
     if not result:
         raise RuntimeError("LangChain no devolvió contenido.")
     return result

@@ -30,6 +30,7 @@ from generateArticle import (
     _language_name,
     _generate_with_langchain,
     _is_gemini_model,
+    LLMChain,
     generate_article_with_ai,
     generate_title_with_ai,
     SIMILARITY_THRESHOLD_DEFAULT,
@@ -935,6 +936,70 @@ class TestGenerateWithLangchainGemini:
         call_kwargs = mock_google_llm.call_args[1]
         assert call_kwargs["max_output_tokens"] == 256
         assert call_kwargs["temperature"] == 0.5
+
+
+
+# ---- LLMChain class ----
+class TestLLMChain:
+    """Tests for the LLMChain class that wraps LCEL chains with an LLMChain-style API."""
+
+    def test_run_returns_content(self):
+        """LLMChain.run() should return the text produced by the underlying LCEL chain."""
+        fake_inner_chain = MagicMock()
+        fake_inner_chain.invoke.return_value = "generated content"
+        mock_prompt = MagicMock()
+        mock_llm = MagicMock()
+        mock_prompt.__or__ = MagicMock(return_value=MagicMock(
+            __or__=MagicMock(return_value=fake_inner_chain)
+        ))
+        with patch("generateArticle.StrOutputParser") as mock_parser:
+            chain = LLMChain(llm=mock_llm, prompt=mock_prompt)
+            result = chain.run(user_prompt="test input")
+        assert result == "generated content"
+        fake_inner_chain.invoke.assert_called_once_with({"user_prompt": "test input"})
+
+    def test_invoke_returns_content(self):
+        """LLMChain.invoke() should return the text produced by the underlying LCEL chain."""
+        fake_inner_chain = MagicMock()
+        fake_inner_chain.invoke.return_value = "invoked content"
+        mock_prompt = MagicMock()
+        mock_llm = MagicMock()
+        mock_prompt.__or__ = MagicMock(return_value=MagicMock(
+            __or__=MagicMock(return_value=fake_inner_chain)
+        ))
+        with patch("generateArticle.StrOutputParser"):
+            chain = LLMChain(llm=mock_llm, prompt=mock_prompt)
+            result = chain.invoke({"user_prompt": "test input"})
+        assert result == "invoked content"
+
+    def test_run_and_invoke_equivalent(self):
+        """LLMChain.run(**kw) and LLMChain.invoke(kw) should produce the same result."""
+        fake_inner_chain = MagicMock()
+        fake_inner_chain.invoke.return_value = "same content"
+        mock_prompt = MagicMock()
+        mock_llm = MagicMock()
+        mock_prompt.__or__ = MagicMock(return_value=MagicMock(
+            __or__=MagicMock(return_value=fake_inner_chain)
+        ))
+        with patch("generateArticle.StrOutputParser"):
+            chain = LLMChain(llm=mock_llm, prompt=mock_prompt)
+            result_run = chain.run(user_prompt="text")
+            result_invoke = chain.invoke({"user_prompt": "text"})
+        assert result_run == result_invoke
+
+    def test_uses_prompt_and_llm_in_chain(self):
+        """LLMChain should build the LCEL chain as: prompt | llm | StrOutputParser()."""
+        mock_prompt = MagicMock()
+        mock_llm = MagicMock()
+        mock_prompt_llm = MagicMock()
+        mock_full_chain = MagicMock()
+        mock_full_chain.invoke.return_value = "ok"
+        mock_prompt.__or__ = MagicMock(return_value=mock_prompt_llm)
+        mock_prompt_llm.__or__ = MagicMock(return_value=mock_full_chain)
+        with patch("generateArticle.StrOutputParser") as mock_parser:
+            chain = LLMChain(llm=mock_llm, prompt=mock_prompt)
+        mock_prompt.__or__.assert_called_once_with(mock_llm)
+        mock_prompt_llm.__or__.assert_called_once_with(mock_parser.return_value)
 
 
 # ---- AI_TEMPERATURE_ARTICLE and AI_TEMPERATURE_TITLE constants ----
