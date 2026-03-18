@@ -1246,7 +1246,7 @@ class TestMainCli:
         """main() must call generate_and_save_article with the --tag argument."""
         import sys
         from generateArticle import main
-        with patch.object(sys, "argv", ["generateArticle.py", "--tag", "Spring Boot"]):
+        with patch.object(sys, "argv", ["generateArticle.py", "--category", "Spring Boot", "--tag", "Spring Boot"]):
             main()
         mock_gen.assert_called_once()
         _, kwargs = mock_gen.call_args
@@ -1281,6 +1281,7 @@ class TestMainCli:
         from generateArticle import main
         with patch.object(sys, "argv", [
             "generateArticle.py",
+            "--category", "Spring Boot",
             "--tag", "Lombok",
             "--output", "/tmp/test_output.json",
         ]):
@@ -1298,6 +1299,7 @@ class TestMainCli:
         from generateArticle import main
         with patch.object(sys, "argv", [
             "generateArticle.py",
+            "--category", "Spring Boot",
             "--tag", "Lombok",
             "--language", "en",
         ]):
@@ -1315,6 +1317,7 @@ class TestMainCli:
         from generateArticle import main
         with patch.object(sys, "argv", [
             "generateArticle.py",
+            "--category", "Spring Boot",
             "--tag", "Lombok",
             "--avoid-titles", "Título A;Título B",
         ]):
@@ -1330,7 +1333,7 @@ class TestMainCli:
         """main() must exit with code 1 when no API key is configured."""
         import sys
         from generateArticle import main
-        with patch.object(sys, "argv", ["generateArticle.py", "--tag", "Lombok"]):
+        with patch.object(sys, "argv", ["generateArticle.py", "--category", "Spring Boot", "--tag", "Lombok"]):
             with pytest.raises(SystemExit) as exc_info:
                 main()
         assert exc_info.value.code == 1
@@ -1345,6 +1348,7 @@ class TestMainCli:
         from generateArticle import main
         with patch.object(sys, "argv", [
             "generateArticle.py",
+            "--category", "Spring Boot",
             "--tag", "Lombok",
             "--username", "myUser",
         ]):
@@ -1362,6 +1366,7 @@ class TestMainCli:
         from generateArticle import main
         with patch.object(sys, "argv", [
             "generateArticle.py",
+            "--category", "Spring Boot",
             "--tag", "Lombok",
             "--author", "legacyUser",
         ]):
@@ -1379,6 +1384,7 @@ class TestMainCli:
         from generateArticle import main
         with patch.object(sys, "argv", [
             "generateArticle.py",
+            "--category", "Spring Boot",
             "--tag", "Lombok",
             "--site", "https://myblog.com",
         ]):
@@ -1396,6 +1402,7 @@ class TestMainCli:
         from generateArticle import main
         with patch.object(sys, "argv", [
             "generateArticle.py",
+            "--category", "Spring Boot",
             "--tag", "Lombok",
             "--title", "Mi Título Personalizado",
         ]):
@@ -1413,8 +1420,64 @@ class TestMainCli:
         from generateArticle import main
         with patch.object(sys, "argv", [
             "generateArticle.py",
+            "--category", "Spring Boot",
             "--tag", "Lombok",
         ]):
             main()
         _, kwargs = mock_gen.call_args
         assert kwargs["title"] is None
+
+    @patch("generateArticle.generate_and_save_article", return_value=True)
+    @patch("generateArticle.OpenAI")
+    @patch("generateArticle.OPENAIAPIKEY", "fake-key")
+    @patch("generateArticle.OPENAI_MODEL", "gpt-4o")
+    def test_main_category_is_required(self, mock_openai_cls, mock_gen):
+        """main() must exit with error when --category is not provided."""
+        import sys
+        from generateArticle import main
+        with patch.object(sys, "argv", ["generateArticle.py", "--tag", "Lombok"]):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+        assert exc_info.value.code == 2  # argparse exits with code 2 for missing required args
+
+    @patch("generateArticle.generate_and_save_article", return_value=True)
+    @patch("generateArticle.OpenAI")
+    @patch("generateArticle.OPENAIAPIKEY", "fake-key")
+    @patch("generateArticle.OPENAI_MODEL", "gpt-4o")
+    def test_main_tag_defaults_to_none(self, mock_openai_cls, mock_gen):
+        """main() must pass tag_text=None when --tag is not provided."""
+        import sys
+        from generateArticle import main
+        with patch.object(sys, "argv", [
+            "generateArticle.py",
+            "--category", "Spring Boot",
+        ]):
+            main()
+        _, kwargs = mock_gen.call_args
+        assert kwargs["tag_text"] is None
+
+
+class TestPromptWithoutTag:
+    def test_generation_prompt_without_tag(self):
+        """build_generation_prompt works without tag_text."""
+        prompt = build_generation_prompt("Spring Boot", "Lombok")
+        assert "Spring Boot" in prompt
+        assert "Lombok" in prompt
+
+    def test_generation_prompt_with_none_tag(self):
+        """build_generation_prompt works with tag_text=None."""
+        prompt = build_generation_prompt("Spring Boot", "Lombok", None)
+        assert "Spring Boot" in prompt
+        assert "None" not in prompt
+
+    def test_title_prompt_without_tag(self):
+        """build_title_prompt works without tag_text."""
+        prompt = build_title_prompt("Spring Boot", "Lombok")
+        assert "Spring Boot" in prompt
+        assert "Lombok" in prompt
+
+    def test_title_prompt_with_none_tag(self):
+        """build_title_prompt works with tag_text=None."""
+        prompt = build_title_prompt("Spring Boot", "Lombok", None)
+        assert "Spring Boot" in prompt
+        assert "None" not in prompt
