@@ -295,7 +295,7 @@ def _retry_with_backoff(fn: Callable, max_retries: int = OPENAI_MAX_RETRIES, bas
             raise
     raise RuntimeError(f"Falló tras {max_retries} reintentos") from last_exc
 
-def build_generation_prompt(parent_name: str, subcat_name: str, tag_text: str, avoid_titles: Optional[List[str]] = None, language: str = ARTICLE_LANGUAGE) -> str:
+def build_generation_prompt(parent_name: str, subcat_name: str, tag_text: Optional[str] = None, avoid_titles: Optional[List[str]] = None, language: str = ARTICLE_LANGUAGE) -> str:
     avoid_titles = avoid_titles or []
     avoid_block = ""
     if avoid_titles:
@@ -305,7 +305,8 @@ def build_generation_prompt(parent_name: str, subcat_name: str, tag_text: str, a
             + "; ".join(f'"{t}"' for t in avoid_list)
         )
     lang = _language_name(language)
-    return f"""Artículo SEO en {lang} sobre "{tag_text}" (categoría: "{parent_name}", subcategoría: "{subcat_name}").
+    topic = f'sobre "{tag_text}" ' if tag_text else ""
+    return f"""Artículo SEO en {lang} {topic}(categoría: "{parent_name}", subcategoría: "{subcat_name}").
 Devuelve SOLO JSON: {{"title":"...","summary":"...","body":"...","keywords":[...]}}
 
 title: optimizado para SEO y CTR, conciso (máx. 60 caracteres), incluye palabra clave principal al inicio.
@@ -326,7 +327,7 @@ body (HTML semántico bien cerrado, optimizado para SEO on-page):
 Tono profesional, sin relleno. JSON con comillas escapadas.{avoid_block}
 """
 
-def build_title_prompt(parent_name: str, subcat_name: str, tag_text: str, avoid_titles: Optional[List[str]] = None, language: str = ARTICLE_LANGUAGE) -> str:
+def build_title_prompt(parent_name: str, subcat_name: str, tag_text: Optional[str] = None, avoid_titles: Optional[List[str]] = None, language: str = ARTICLE_LANGUAGE) -> str:
     """Construye un prompt ligero para generar únicamente el título de un artículo."""
     avoid_titles = avoid_titles or []
     avoid_block = ""
@@ -337,15 +338,16 @@ def build_title_prompt(parent_name: str, subcat_name: str, tag_text: str, avoid_
             + "; ".join(f'"{t}"' for t in avoid_list)
         )
     lang = _language_name(language)
+    topic = f'para el tema "{tag_text}" ' if tag_text else ""
     return (
-        f'Genera un título de artículo técnico en {lang} para el tema "{tag_text}" '
+        f'Genera un título de artículo técnico en {lang} {topic}'
         f'(categoría: "{parent_name}", subcategoría: "{subcat_name}").\n'
         f"Requisitos: atractivo, conciso (máx. {META_TITLE_MAX_LENGTH} caracteres), "
         f"optimizado para SEO, incluye la palabra clave principal.{avoid_block}\n"
         "Devuelve ÚNICAMENTE el texto del título, sin comillas ni texto adicional."
     )
 
-def email_generation_prompt(parent_name: str, subcat_name: str, tag_text: str, avoid_titles=None):
+def email_generation_prompt(parent_name: str, subcat_name: str, tag_text: Optional[str] = None, avoid_titles=None):
     """
     Construye el prompt y lo envía por email usando SMTP ya configurado.
     NO intenta parsear ninguna respuesta de OpenAI (solo notifica).
@@ -564,7 +566,7 @@ def generate_title_with_ai(client_ai: Optional[OpenAI], parent_name: str, subcat
 
 def generate_and_save_article(
     client_ai: Optional[OpenAI],
-    tag_text: str,
+    tag_text: Optional[str],
     parent_name: str,
     subcat_name: str,
     avoid_titles: Optional[List[str]] = None,
@@ -676,7 +678,7 @@ def generate_and_save_article(
         json.dump(doc, f, ensure_ascii=False, indent=2)
 
     notify("Artículo generado",
-           f"Título: {title}<br>Slug: {site}/post/{slug if site else slug}<br>Tag: {tag_text}",
+           f"Título: {title}<br>Slug: {site}/post/{slug if site else slug}<br>Tag: {tag_text or ''}",
            level="success", always_email=True)
     return True
 
@@ -686,10 +688,10 @@ def main():
         description="Genera un artículo técnico con IA y lo exporta a un fichero JSON.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--tag", "-t", required=True,
-                        help="Tema o tag del artículo (requerido)")
-    parser.add_argument("--category", "-c", default="General",
-                        help="Nombre de la categoría padre")
+    parser.add_argument("--tag", "-t", default=None,
+                        help="Tema o tag del artículo (opcional)")
+    parser.add_argument("--category", "-c", required=True,
+                        help="Nombre de la categoría padre (requerido)")
     parser.add_argument("--subcategory", "-s", default="General",
                         help="Nombre de la subcategoría")
     parser.add_argument("--output", "-o", default="article.json",
