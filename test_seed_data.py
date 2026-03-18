@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """Tests for seed_data.py taxonomy definition."""
 
-import pytest
-
 from seed_data import TAXONOMY
 
 

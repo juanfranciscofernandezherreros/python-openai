@@ -905,7 +905,6 @@ Durante la ejecución, el script puede mandarte distintos tipos de mensajes por 
 ## 🕐 Frecuencia de publicación
 - Genera **un artículo por ejecución** (una ejecución = un artículo).
 - Si usas un **CronJob semanal** (K8s o Cloud Scheduler), puedes programarlo para ejecutarse cada lunes a las 08:00.
-- La variable `LIMIT_PUBLICATION` está reservada para uso futuro y no afecta al comportamiento actual.
 
 ---
 

@@ -74,8 +74,6 @@ spec:
                   value: tu_correo@gmail.com
                 - name: NOTIFY_VERBOSE
                   value: "true"
-                - name: LIMIT_PUBLICATION
-                  value: "true"
                 - name: SEND_PROMPT_EMAIL
                   value: "false"
                 - name: ARTICLE_LANGUAGE

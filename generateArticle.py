@@ -42,8 +42,6 @@ SMTP_PASS   = os.getenv("SMTP_PASS")
 FROM_EMAIL  = os.getenv("FROM_EMAIL") or (SMTP_USER or "")
 TO_EMAIL    = os.getenv("NOTIFY_EMAIL") or "jnfz92@gmail.com"
 NOTIFY_VERBOSE = (os.getenv("NOTIFY_VERBOSE", "true").lower() in ("1","true","yes","y"))
-# Controla si se limita a 1 artículo por semana (true) o se permite publicar siempre (false) — reservado para uso futuro
-LIMIT_PUBLICATION = (os.getenv("LIMIT_PUBLICATION", "true").lower() in ("1", "true", "yes", "y"))
 # Si es true, enviará por email el prompt de generación antes de llamar a OpenAI
 SEND_PROMPT_EMAIL = (os.getenv("SEND_PROMPT_EMAIL", "false").lower() in ("1", "true", "yes", "y"))
 # Idioma por defecto para los artículos generados (código ISO 639-1, p. ej. "es", "en", "fr")
@@ -56,7 +54,6 @@ AI_TEMPERATURE_TITLE   = float(os.getenv("AI_TEMPERATURE_TITLE",   "0.9"))
 SIMILARITY_THRESHOLD_DEFAULT = 0.82   # umbral para is_too_similar genérico
 SIMILARITY_THRESHOLD_STRICT  = 0.86   # umbral usado al reintentar títulos
 MAX_TITLE_RETRIES            = 5      # intentos máx. para generar título único
-RECENT_TITLES_LIMIT          = 50     # cuántos títulos recientes cargar
 OPENAI_MAX_RETRIES           = 3      # reintentos para llamadas a OpenAI
 OPENAI_RETRY_BASE_DELAY      = 2      # seg. base para backoff exponencial
 META_TITLE_MAX_LENGTH        = 60     # máx. caracteres para metaTitle SEO

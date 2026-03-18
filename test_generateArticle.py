@@ -36,7 +36,6 @@ from generateArticle import (
     SIMILARITY_THRESHOLD_DEFAULT,
     SIMILARITY_THRESHOLD_STRICT,
     MAX_TITLE_RETRIES,
-    RECENT_TITLES_LIMIT,
     META_TITLE_MAX_LENGTH,
     MAX_AVOID_TITLES_IN_PROMPT,
     GENERATION_SYSTEM_MSG,
@@ -293,9 +292,6 @@ class TestConstants:
 
     def test_max_retries_positive(self):
         assert MAX_TITLE_RETRIES > 0
-
-    def test_recent_limit_positive(self):
-        assert RECENT_TITLES_LIMIT > 0
 
     def test_max_avoid_titles_in_prompt_positive(self):
         assert MAX_AVOID_TITLES_IN_PROMPT > 0

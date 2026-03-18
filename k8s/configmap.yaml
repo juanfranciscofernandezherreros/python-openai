@@ -18,7 +18,6 @@ data:
   FROM_EMAIL: "tu_correo@gmail.com"
   NOTIFY_EMAIL: "tu_correo@gmail.com"
   NOTIFY_VERBOSE: "true"
-  LIMIT_PUBLICATION: "true"
   SEND_PROMPT_EMAIL: "false"
   ARTICLE_LANGUAGE: "es"
   AI_TEMPERATURE_ARTICLE: "0.7"

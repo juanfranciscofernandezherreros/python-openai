@@ -62,7 +62,6 @@ El script carga su configuración desde un fichero `.env` en el mismo directorio
 | `FROM_EMAIL` | ❌ | Dirección de envío |
 | `NOTIFY_EMAIL` | ❌ | Destinatario de las notificaciones |
 | `NOTIFY_VERBOSE` | ❌ | Si es `true` (por defecto), envía email en cada evento; si es `false`, solo en errores/avisos |
-| `LIMIT_PUBLICATION` | ❌ | Reservado para uso futuro. No afecta al comportamiento actual |
 | `SEND_PROMPT_EMAIL` | ❌ | Si es `true`, envía por email el prompt antes de llamar a la IA |
 
 ### Argumentos CLI
@@ -420,8 +419,6 @@ def current_week_window_utc_for_madrid(start_weekday=1):
 ```
 
 Esta función se usa internamente para calcular ventanas de tiempo en hora de Madrid, independientemente del huso horario del servidor.
-
-La variable `LIMIT_PUBLICATION` está reservada para uso futuro.
 
 ---
 
