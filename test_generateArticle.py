@@ -1320,3 +1320,36 @@ class TestMainCli:
             main()
         _, kwargs = mock_gen.call_args
         assert kwargs["site"] == "https://myblog.com"
+
+    @patch("generateArticle.generate_and_save_article", return_value=True)
+    @patch("generateArticle.OpenAI")
+    @patch("generateArticle.OPENAIAPIKEY", "fake-key")
+    @patch("generateArticle.OPENAI_MODEL", "gpt-4o")
+    def test_main_passes_title_arg(self, mock_openai_cls, mock_gen):
+        """main() must pass --title to generate_and_save_article."""
+        import sys
+        from generateArticle import main
+        with patch.object(sys, "argv", [
+            "generateArticle.py",
+            "--tag", "Lombok",
+            "--title", "Mi Título Personalizado",
+        ]):
+            main()
+        _, kwargs = mock_gen.call_args
+        assert kwargs["title"] == "Mi Título Personalizado"
+
+    @patch("generateArticle.generate_and_save_article", return_value=True)
+    @patch("generateArticle.OpenAI")
+    @patch("generateArticle.OPENAIAPIKEY", "fake-key")
+    @patch("generateArticle.OPENAI_MODEL", "gpt-4o")
+    def test_main_title_default_is_none(self, mock_openai_cls, mock_gen):
+        """main() must pass title=None when --title is not provided."""
+        import sys
+        from generateArticle import main
+        with patch.object(sys, "argv", [
+            "generateArticle.py",
+            "--tag", "Lombok",
+        ]):
+            main()
+        _, kwargs = mock_gen.call_args
+        assert kwargs["title"] is None

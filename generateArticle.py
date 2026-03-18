@@ -533,6 +533,7 @@ def generate_and_save_article(
     site: str = SITE,
     language: str = ARTICLE_LANGUAGE,
     output_path: str = "article.json",
+    title: Optional[str] = None,
 ) -> bool:
     """Genera un artículo con IA y lo guarda en un fichero JSON."""
     avoid_titles = list(avoid_titles) if avoid_titles else []
@@ -545,32 +546,42 @@ def generate_and_save_article(
         except Exception as e:
             notify("Error enviando prompt por email", str(e), level="warning", always_email=True)
 
-    max_attempts = MAX_TITLE_RETRIES
-    title = summary = body = None
-    keywords: List[str] = []
-
-    # Fase 1: Generar el artículo completo (única llamada costosa a OpenAI)
-    t, s, b, kw = generate_article_with_ai(client_ai, parent_name, subcat_name, tag_text, avoid_titles=avoid_titles, language=language)
-
-    if not is_too_similar(t, avoid_titles, threshold=SIMILARITY_THRESHOLD_STRICT):
-        title, summary, body, keywords = t, s, b, kw
+    # Si el título se proporcionó como argumento, generar solo el cuerpo y usarlo directamente
+    if title:
+        t, s, b, kw = generate_article_with_ai(client_ai, parent_name, subcat_name, tag_text, avoid_titles=avoid_titles, language=language)
+        # Reemplazar el título generado por el proporcionado
+        escaped_title = html_escape(title)
+        new_b, replacements = re.subn(r'<h1[^>]*>.*?</h1>', f'<h1>{escaped_title}</h1>', b, count=1, flags=re.DOTALL | re.IGNORECASE)
+        if not replacements:
+            new_b = f'<h1>{escaped_title}</h1>\n' + b
+        title, summary, body, keywords = title, s, new_b, kw
     else:
-        # Fase 2: El cuerpo del artículo es válido; sólo regenerar el título (llamadas ligeras)
-        notify("Título similar detectado", f"Intento 1/{max_attempts}: '{t}'. Regenerando sólo el título...", level="warning", always_email=True)
-        avoid_titles.append(t)
-        for attempt in range(2, max_attempts + 1):
-            new_t = generate_title_with_ai(client_ai, parent_name, subcat_name, tag_text, avoid_titles=avoid_titles, language=language)
-            if not is_too_similar(new_t, avoid_titles, threshold=SIMILARITY_THRESHOLD_STRICT):
-                # Actualiza el <h1> del cuerpo para que coincida con el nuevo título
-                escaped_title = html_escape(new_t)
-                new_b, replacements = re.subn(r'<h1[^>]*>.*?</h1>', f'<h1>{escaped_title}</h1>', b, count=1, flags=re.DOTALL | re.IGNORECASE)
-                if not replacements:
-                    # El cuerpo no tenía <h1>; lo anteponemos
-                    new_b = f'<h1>{escaped_title}</h1>\n' + b
-                title, summary, body, keywords = new_t, s, new_b, kw
-                break
-            notify("Título similar detectado", f"Intento {attempt}/{max_attempts}: '{new_t}'. Reintentando...", level="warning", always_email=True)
-            avoid_titles.append(new_t)
+        max_attempts = MAX_TITLE_RETRIES
+        title = summary = body = None
+        keywords: List[str] = []
+
+        # Fase 1: Generar el artículo completo (única llamada costosa a OpenAI)
+        t, s, b, kw = generate_article_with_ai(client_ai, parent_name, subcat_name, tag_text, avoid_titles=avoid_titles, language=language)
+
+        if not is_too_similar(t, avoid_titles, threshold=SIMILARITY_THRESHOLD_STRICT):
+            title, summary, body, keywords = t, s, b, kw
+        else:
+            # Fase 2: El cuerpo del artículo es válido; sólo regenerar el título (llamadas ligeras)
+            notify("Título similar detectado", f"Intento 1/{max_attempts}: '{t}'. Regenerando sólo el título...", level="warning", always_email=True)
+            avoid_titles.append(t)
+            for attempt in range(2, max_attempts + 1):
+                new_t = generate_title_with_ai(client_ai, parent_name, subcat_name, tag_text, avoid_titles=avoid_titles, language=language)
+                if not is_too_similar(new_t, avoid_titles, threshold=SIMILARITY_THRESHOLD_STRICT):
+                    # Actualiza el <h1> del cuerpo para que coincida con el nuevo título
+                    escaped_title = html_escape(new_t)
+                    new_b, replacements = re.subn(r'<h1[^>]*>.*?</h1>', f'<h1>{escaped_title}</h1>', b, count=1, flags=re.DOTALL | re.IGNORECASE)
+                    if not replacements:
+                        # El cuerpo no tenía <h1>; lo anteponemos
+                        new_b = f'<h1>{escaped_title}</h1>\n' + b
+                    title, summary, body, keywords = new_t, s, new_b, kw
+                    break
+                notify("Título similar detectado", f"Intento {attempt}/{max_attempts}: '{new_t}'. Reintentando...", level="warning", always_email=True)
+                avoid_titles.append(new_t)
 
     if not title or not body:
         notify("No se pudo generar título único", "Tras varios intentos no se logró un título suficientemente diferente.", level="error", always_email=True)
@@ -663,6 +674,8 @@ def main():
                         help="URL base del sitio para URLs canónicas (p. ej. https://myblog.com), también configurable con SITE en .env")
     parser.add_argument("--language", "-l", default=ARTICLE_LANGUAGE,
                         help="Código de idioma ISO 639-1 (p. ej. es, en, fr)")
+    parser.add_argument("--title", "-T", default=None,
+                        help="Título del artículo (si se omite, se genera con IA)")
     parser.add_argument("--avoid-titles", default="",
                         help="Títulos a evitar, separados por ';'")
     args = parser.parse_args()
@@ -705,6 +718,7 @@ def main():
             site=args.site,
             language=args.language,
             output_path=args.output,
+            title=args.title,
         )
     except Exception as e:
         notify("Error generando artículo", str(e), level="error", always_email=True)
