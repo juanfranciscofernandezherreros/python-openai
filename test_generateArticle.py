@@ -2269,6 +2269,49 @@ class TestMainSequentialCli:
     @patch("generateArticle.OpenAI")
     @patch("generateArticle.OPENAIAPIKEY", "fake-key")
     @patch("generateArticle.OPENAI_MODEL", "gpt-4o")
+    def test_sequential_mode_accepts_inline_json(self, mock_openai_cls, mock_gen):
+        """--sequential accepts an inline JSON array string instead of a file path."""
+        import sys
+
+        from generateArticle import main
+        inline = '[{"category": "Spring Boot", "tag": "Lombok"}, {"category": "Java", "tag": "Streams"}]'
+        with patch.object(sys, "argv", ["generateArticle.py", "--sequential", inline]):
+            main()
+        assert mock_gen.call_count == 2
+        calls = mock_gen.call_args_list
+        assert calls[0][1]["parent_name"] == "Spring Boot"
+        assert calls[0][1]["tag_text"] == "Lombok"
+        assert calls[1][1]["parent_name"] == "Java"
+        assert calls[1][1]["tag_text"] == "Streams"
+
+    @patch("generateArticle.OPENAIAPIKEY", "fake-key")
+    @patch("generateArticle.OPENAI_MODEL", "gpt-4o")
+    def test_sequential_mode_inline_json_invalid(self):
+        """--sequential exits with code 1 when inline JSON string is malformed."""
+        import sys
+
+        from generateArticle import main
+        with patch.object(sys, "argv", ["generateArticle.py", "--sequential", "[not valid json"]):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+        assert exc_info.value.code == 1
+
+    @patch("generateArticle.OPENAIAPIKEY", "fake-key")
+    @patch("generateArticle.OPENAI_MODEL", "gpt-4o")
+    def test_sequential_mode_inline_json_not_array(self):
+        """--sequential exits with code 1 when inline JSON is not an array."""
+        import sys
+
+        from generateArticle import main
+        with patch.object(sys, "argv", ["generateArticle.py", "--sequential", '{"category": "Java"}']):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+        assert exc_info.value.code == 1
+
+    @patch("generateArticle.generate_and_save_article", return_value=True)
+    @patch("generateArticle.OpenAI")
+    @patch("generateArticle.OPENAIAPIKEY", "fake-key")
+    @patch("generateArticle.OPENAI_MODEL", "gpt-4o")
     def test_sequential_mode_cli_category_as_fallback(self, mock_openai_cls, mock_gen):
         """In --sequential mode, --category CLI arg is used as fallback for items without category."""
         import sys

@@ -140,7 +140,7 @@ python3 generateArticle.py \
 | `--title` / `-T` | ❌ | Título del artículo (si se omite, se genera con IA) | — |
 | `--provider` / `-p` | ❌ | Proveedor de IA: `auto`, `openai`, `gemini` u `ollama` | valor de `AI_PROVIDER` |
 | `--avoid-titles` | ❌ | Títulos a evitar (separados por `;`). El script compara el nuevo título con esta lista y regenera si la similitud supera el umbral 0.86 | `""` |
-| `--sequential` / `-q` | ❌ | Ruta a un fichero JSON con un array de configuraciones. Genera cada artículo de forma **secuencial**. Ver [Modo secuencial](#modo-secuencial). | — |
+| `--sequential` / `-q` | ❌ | Array JSON inline o ruta a fichero JSON con un array de configuraciones. Genera cada artículo de forma **secuencial**. Ver [Modo secuencial](#modo-secuencial). | — |
 
 El script:
 1. Valida la configuración (clave de API disponible).
@@ -153,7 +153,19 @@ El script:
 
 ### Modo secuencial
 
-Con `--sequential` / `-q` puedes generar **varios artículos en una sola ejecución** pasando un fichero JSON con un array de configuraciones. Cada artículo se genera **uno tras otro** (de forma secuencial).
+Con `--sequential` / `-q` puedes generar **varios artículos en una sola ejecución** pasando un array JSON de configuraciones. Cada artículo se genera **uno tras otro** (de forma secuencial).
+
+El valor puede ser:
+- **Un string JSON inline** (directamente en la línea de comandos, sin crear ningún fichero).
+- **La ruta a un fichero `.json`** que contenga el array (comportamiento clásico).
+
+**Ejecución con JSON inline (sin fichero):**
+
+```bash
+python generateArticle.py --sequential '[{"category":"Spring Boot","tag":"Lombok","output":"lombok.json"},{"category":"Java","tag":"Streams","output":"streams.json"}]'
+```
+
+**Ejecución con fichero `articles.json`:**
 
 **Ejemplo de fichero `articles.json`:**
 
@@ -179,8 +191,6 @@ Con `--sequential` / `-q` puedes generar **varios artículos en una sola ejecuci
   }
 ]
 ```
-
-**Ejecución:**
 
 ```bash
 python generateArticle.py --sequential articles.json

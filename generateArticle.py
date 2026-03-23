@@ -227,8 +227,10 @@ def main():
                         help="Títulos a evitar, separados por ';'")
     parser.add_argument("--sequential", "-q",
                         default=None,
-                        metavar="FICHERO_JSON",
-                        help="Ruta a un fichero JSON con un array de configuraciones. "
+                        metavar="JSON_O_FICHERO",
+                        help="Array de configuraciones en formato JSON inline o ruta a un fichero .json. "
+                             "Si el valor no es una ruta de fichero existente se intenta parsear como "
+                             "JSON (ej: '[{\"category\":\"Java\",\"tag\":\"Streams\"}]'). "
                              "Genera cada artículo de forma secuencial. "
                              "Cada entrada acepta: tag, category, subcategory, output, "
                              "username, site, language, title, avoid_titles. "
@@ -283,21 +285,30 @@ def main():
 
     # ── Modo secuencial ──────────────────────────────────────────────────
     if args.sequential is not None:
-        try:
-            with open(args.sequential, encoding="utf-8") as fh:
-                items = json.load(fh)
-        except FileNotFoundError:
-            notify("Error", f"Fichero no encontrado: {args.sequential}", level="error", always_email=True)
-            print(f"\n❌ Fichero no encontrado: {args.sequential}")
-            sys.exit(1)
-        except json.JSONDecodeError as e:
-            notify("Error", f"JSON inválido en '{args.sequential}': {e}", level="error", always_email=True)
-            print(f"\n❌ JSON inválido en '{args.sequential}': {e}")
-            sys.exit(1)
+        import os as _os
+        sequential_value = args.sequential.strip()
+        if _os.path.exists(sequential_value):
+            # Existing file path
+            try:
+                with open(sequential_value, encoding="utf-8") as fh:
+                    items = json.load(fh)
+            except json.JSONDecodeError as e:
+                notify("Error", f"JSON inválido en '{sequential_value}': {e}", level="error", always_email=True)
+                print(f"\n❌ JSON inválido en '{sequential_value}': {e}")
+                sys.exit(1)
+        else:
+            # Try to parse as inline JSON string
+            try:
+                items = json.loads(sequential_value)
+            except json.JSONDecodeError:
+                # Not valid JSON either — report as missing file
+                notify("Error", f"Fichero no encontrado: {sequential_value}", level="error", always_email=True)
+                print(f"\n❌ Fichero no encontrado: {sequential_value}")
+                sys.exit(1)
 
         if not isinstance(items, list):
-            notify("Error", "El fichero JSON debe contener un array de configuraciones.", level="error", always_email=True)
-            print("\n❌ El fichero JSON debe contener un array de configuraciones.")
+            notify("Error", "El JSON debe contener un array de configuraciones.", level="error", always_email=True)
+            print("\n❌ El JSON debe contener un array de configuraciones.")
             sys.exit(1)
 
         total = len(items)
