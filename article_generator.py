@@ -5,7 +5,7 @@ Módulo principal de generación y guardado de artículos técnicos SEO.
 
 Responsabilidades:
 - Generar artículos completos (título + resumen + cuerpo HTML + keywords)
-  mediante llamadas a la IA con LangChain, con fallback al SDK de OpenAI.
+  mediante llamadas a la IA con LangChain, con fallback al cliente BaseChatModel.
 - Regenerar únicamente el título de un artículo cuando el generado es
   demasiado similar a títulos existentes (Fase 2 de deduplicación).
 - Ensamblar el documento JSON completo con todos los metadatos SEO
@@ -37,7 +37,7 @@ from __future__ import annotations
 import json
 import logging
 
-from openai import OpenAI
+from langchain_core.language_models import BaseChatModel
 
 import config
 from utils import slugify, is_too_similar, html_escape
@@ -90,22 +90,52 @@ def _format_gemini_langchain_error(prefix: str, err: Exception) -> str:
     return f"{prefix}: {raw_msg}"
 
 
-def generate_article_with_ai(client_ai: OpenAI | None, parent_name: str, subcat_name: str, tag_text: str, title: str | None = None, avoid_titles: list[str] | None = None, language: str = config.ARTICLE_LANGUAGE) -> tuple[str, str, str, list[str]]:
+def _invoke_chat_model(client_ai: BaseChatModel, system_msg: str, user_prompt: str) -> str:
+    """Invoca un BaseChatModel y devuelve el contenido textual de la respuesta."""
+    response = client_ai.invoke([
+        ("system", system_msg),
+        ("human", user_prompt),
+    ])
+    if isinstance(response, str):
+        return response
+    if not hasattr(response, "content"):
+        raise RuntimeError("El cliente de chat no devolvió un mensaje compatible con contenido textual.")
+
+    content = response.content
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for part in content:
+            if isinstance(part, dict) and part.get("type") == "text":
+                parts.append(str(part.get("text", "")))
+            else:
+                parts.append(str(part))
+        text = "\n".join(parts).strip()
+        if not text:
+            raise RuntimeError("El cliente de chat devolvió contenido vacío.")
+        return text
+    if content is None:
+        raise RuntimeError("El cliente de chat devolvió contenido vacío.")
+    return str(content)
+
+
+def generate_article_with_ai(client_ai: BaseChatModel | None, parent_name: str, subcat_name: str, tag_text: str, title: str | None = None, avoid_titles: list[str] | None = None, language: str = config.ARTICLE_LANGUAGE) -> tuple[str, str, str, list[str]]:
     """Genera un artículo técnico completo usando la IA configurada.
 
     Flujo de ejecución:
     1. Construye el prompt con :func:`~prompts.build_generation_prompt`.
     2. Llama a :func:`~ai_providers._generate_with_langchain` con reintentos
        via :func:`~ai_providers._retry_with_backoff`.
-    3. Si LangChain falla (p. ej. proveedor no disponible), usa el SDK de OpenAI
-       directamente como fallback (solo para modelos OpenAI/Ollama).
+    3. Si LangChain falla, usa el cliente ``BaseChatModel`` recibido como
+       fallback genérico.
     4. Extrae el bloque JSON de la respuesta con :func:`~ai_providers._extract_json_block`.
     5. Parsea el JSON con :func:`~ai_providers._safe_json_loads`.
     6. Si el cuerpo HTML no tiene ``<h1>``, lo antepone con el título escapado.
 
     Args:
-        client_ai:     Cliente :class:`~openai.OpenAI` para el fallback SDK.
-                       Puede ser ``None`` cuando se usa Gemini (sin fallback SDK).
+        client_ai:     Cliente LangChain :class:`~langchain_core.language_models.BaseChatModel`
+                       para fallback genérico. Puede ser ``None``.
         parent_name:   Nombre de la categoría padre (p. ej. ``"Spring Boot"``).
         subcat_name:   Nombre de la subcategoría (p. ej. ``"Spring Security"``).
         tag_text:      Tema o tag del artículo (p. ej. ``"JWT Authentication"``).
@@ -146,24 +176,15 @@ def generate_article_with_ai(client_ai: OpenAI | None, parent_name: str, subcat_
         logger.info("LangChain no disponible para artículo; usando SDK como fallback.")
         raw_text = None
 
-    # 2) Fallback: OpenAI SDK Chat Completions — solo para modelos OpenAI/ChatGPT
-    if not raw_text and not _is_gemini_model(config.OPENAI_MODEL) and client_ai is not None:
+    # 2) Fallback: invocación directa del BaseChatModel
+    if not raw_text and client_ai is not None:
         def _call_chat():
-            chat = client_ai.chat.completions.create(
-                model=config.OPENAI_MODEL,
-                messages=[
-                    {"role": "system", "content": config.GENERATION_SYSTEM_MSG},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=config.AI_TEMPERATURE_ARTICLE,
-                max_tokens=config.OPENAI_MAX_ARTICLE_TOKENS,
-            )
-            return chat.choices[0].message.content
+            return _invoke_chat_model(client_ai, config.GENERATION_SYSTEM_MSG, user_prompt)
 
         try:
             raw_text = _retry_with_backoff(_call_chat)
         except Exception as e:
-            raise RuntimeError(f"Fallo llamando a OpenAI: {e}")
+            raise RuntimeError(f"Fallo llamando al modelo de chat: {e}")
 
     if not raw_text:
         raise RuntimeError("El modelo no devolvió contenido.")
@@ -191,7 +212,7 @@ def generate_article_with_ai(client_ai: OpenAI | None, parent_name: str, subcat_
 
     return title, summary, body, keywords
 
-def generate_title_with_ai(client_ai: OpenAI | None, parent_name: str, subcat_name: str, tag_text: str, avoid_titles: list[str] | None = None, language: str = config.ARTICLE_LANGUAGE) -> str:
+def generate_title_with_ai(client_ai: BaseChatModel | None, parent_name: str, subcat_name: str, tag_text: str, avoid_titles: list[str] | None = None, language: str = config.ARTICLE_LANGUAGE) -> str:
     """Genera únicamente el título de un artículo usando la IA configurada.
 
     Mucho más económico que :func:`generate_article_with_ai` porque solo
@@ -202,12 +223,13 @@ def generate_title_with_ai(client_ai: OpenAI | None, parent_name: str, subcat_na
     Flujo de ejecución:
     1. Construye el prompt ligero con :func:`~prompts.build_title_prompt`.
     2. Llama a :func:`~ai_providers._generate_with_langchain` con reintentos.
-    3. Fallback al SDK de OpenAI si LangChain no está disponible.
+    3. Fallback al cliente ``BaseChatModel`` si LangChain no está disponible.
     4. Limpia la respuesta (elimina comillas y espacios) y la trunca a
        ``META_TITLE_MAX_LENGTH`` caracteres.
 
     Args:
-        client_ai:     Cliente :class:`~openai.OpenAI` para el fallback SDK.
+        client_ai:     Cliente LangChain :class:`~langchain_core.language_models.BaseChatModel`
+                       para fallback genérico.
         parent_name:   Nombre de la categoría padre.
         subcat_name:   Nombre de la subcategoría.
         tag_text:      Tema o tag del artículo.
@@ -240,24 +262,15 @@ def generate_title_with_ai(client_ai: OpenAI | None, parent_name: str, subcat_na
         logger.info("LangChain no disponible para título; usando SDK como fallback.")
         raw_text = None
 
-    # 2) Fallback: OpenAI SDK Chat Completions — solo para modelos OpenAI/ChatGPT
-    if not raw_text and not _is_gemini_model(config.OPENAI_MODEL) and client_ai is not None:
+    # 2) Fallback: invocación directa del BaseChatModel
+    if not raw_text and client_ai is not None:
         def _call_chat():
-            chat = client_ai.chat.completions.create(
-                model=config.OPENAI_MODEL,
-                messages=[
-                    {"role": "system", "content": config.TITLE_SYSTEM_MSG},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=config.AI_TEMPERATURE_TITLE,
-                max_tokens=config.OPENAI_MAX_TITLE_TOKENS,
-            )
-            return chat.choices[0].message.content
+            return _invoke_chat_model(client_ai, config.TITLE_SYSTEM_MSG, user_prompt)
 
         try:
             raw_text = _retry_with_backoff(_call_chat)
         except Exception as e:
-            raise RuntimeError(f"Fallo generando título con OpenAI: {e}")
+            raise RuntimeError(f"Fallo generando título con modelo de chat: {e}")
 
     if not raw_text:
         raise RuntimeError("El modelo no devolvió contenido para el título.")
@@ -265,7 +278,7 @@ def generate_title_with_ai(client_ai: OpenAI | None, parent_name: str, subcat_na
     return raw_text.strip().strip("\"'").strip()[:config.META_TITLE_MAX_LENGTH]
 
 def generate_and_save_article(
-    client_ai: OpenAI | None,
+    client_ai: BaseChatModel | None,
     tag_text: str | None,
     parent_name: str,
     subcat_name: str,
@@ -304,7 +317,8 @@ def generate_and_save_article(
     6. **Notificación de éxito**: envía email y muestra mensaje en consola.
 
     Args:
-        client_ai:     Cliente :class:`~openai.OpenAI` (puede ser ``None`` con Gemini).
+        client_ai:     Cliente :class:`~langchain_core.language_models.BaseChatModel`
+                       (puede ser ``None``).
         tag_text:      Tema o tag del artículo. Si es ``None``, se usa solo la categoría.
         parent_name:   Nombre de la categoría padre (requerido).
         subcat_name:   Nombre de la subcategoría.

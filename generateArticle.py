@@ -22,7 +22,7 @@ import json
 import smtplib  # noqa: F401 – re-exportado para compatibilidad con tests
 import sys
 
-from openai import OpenAI
+from langchain_core.language_models import BaseChatModel
 
 # ── Re-exportar todos los símbolos públicos de los submódulos ──────────
 from config import (  # noqa: F401
@@ -115,7 +115,7 @@ from article_generator import (  # noqa: F401
 
 
 # ============ SEQUENTIAL MODE ============
-def _run_sequential(items: list[dict], client_ai: OpenAI | None, args: argparse.Namespace) -> int:
+def _run_sequential(items: list[dict], client_ai: BaseChatModel | None, args: argparse.Namespace) -> int:
     """Genera artículos de forma secuencial a partir de una lista de configuraciones.
 
     Cada elemento de *items* puede sobreescribir cualquier parámetro de generación.
@@ -124,7 +124,7 @@ def _run_sequential(items: list[dict], client_ai: OpenAI | None, args: argparse.
 
     Args:
         items:      Lista de diccionarios con las configuraciones de cada artículo.
-        client_ai:  Cliente de IA ya inicializado (OpenAI / Ollama).
+        client_ai:  Cliente de IA LangChain ya inicializado.
         args:       Namespace de argparse con los valores por defecto del CLI.
 
     Returns:
@@ -263,21 +263,41 @@ def main():
             notify("Configuración incompleta", "Falta la variable de entorno OPENAIAPIKEY.", level="error", always_email=True)
             sys.exit(1)
 
-    # Inicializar cliente de IA (OpenAI SDK — para modelos ChatGPT y Ollama como fallback)
-    client_ai: OpenAI | None = None
+    # Inicializar cliente de IA (LangChain BaseChatModel para todos los proveedores)
+    client_ai: BaseChatModel | None = None
     if using_openai:
         try:
-            client_ai = OpenAI(api_key=OPENAIAPIKEY)
+            client_ai = ChatOpenAI(
+                model=OPENAI_MODEL,
+                api_key=OPENAIAPIKEY,
+                max_tokens=OPENAI_MAX_ARTICLE_TOKENS,
+                temperature=AI_TEMPERATURE_ARTICLE,
+            )
             notify("OpenAI listo", f"Modelo: {OPENAI_MODEL}", level="info", always_email=True)
         except Exception as e:
             notify("Error inicializando OpenAI", str(e), level="error", always_email=True)
             sys.exit(1)
     elif using_gemini:
-        client_ai = None  # Gemini no usa este cliente
+        try:
+            client_ai = ChatGoogleGenerativeAI(
+                model=OPENAI_MODEL,
+                google_api_key=GEMINI_API_KEY,
+                max_output_tokens=OPENAI_MAX_ARTICLE_TOKENS,
+                temperature=AI_TEMPERATURE_ARTICLE,
+            )
+        except Exception as e:
+            notify("Error inicializando Gemini", str(e), level="error", always_email=True)
+            sys.exit(1)
         notify("Gemini listo", f"Modelo: {OPENAI_MODEL}", level="info", always_email=True)
     elif using_ollama:
         try:
-            client_ai = OpenAI(base_url=OLLAMA_BASE_URL, api_key=OLLAMA_PLACEHOLDER_API_KEY)
+            client_ai = ChatOpenAI(
+                model=OPENAI_MODEL,
+                base_url=OLLAMA_BASE_URL,
+                api_key=OLLAMA_PLACEHOLDER_API_KEY,
+                max_tokens=OPENAI_MAX_ARTICLE_TOKENS,
+                temperature=AI_TEMPERATURE_ARTICLE,
+            )
             notify("Ollama listo", f"Modelo: {OPENAI_MODEL} — URL: {OLLAMA_BASE_URL}", level="info", always_email=True)
         except Exception as e:
             notify("Error inicializando Ollama", str(e), level="error", always_email=True)

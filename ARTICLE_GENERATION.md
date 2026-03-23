@@ -180,14 +180,14 @@ Si falta la clave de API de IA (`OPENAIAPIKEY` o `GEMINI_API_KEY` según el mode
 
 ```python
 if using_openai:
-    client_ai = OpenAI(api_key=OPENAIAPIKEY)
+    client_ai = ChatOpenAI(model=OPENAI_MODEL, api_key=OPENAIAPIKEY, ...)
 elif using_gemini:
-    client_ai = None  # Gemini no usa este cliente
+    client_ai = ChatGoogleGenerativeAI(model=OPENAI_MODEL, google_api_key=GEMINI_API_KEY, ...)
 elif using_ollama:
-    client_ai = OpenAI(base_url=OLLAMA_BASE_URL, api_key=OLLAMA_PLACEHOLDER_API_KEY)
+    client_ai = ChatOpenAI(model=OPENAI_MODEL, base_url=OLLAMA_BASE_URL, api_key=OLLAMA_PLACEHOLDER_API_KEY, ...)
 ```
 
-Inicializa el cliente OpenAI SDK (solo para fallback en modelos ChatGPT y Ollama). Gemini se gestiona directamente a través de LangChain y no requiere cliente OpenAI.
+Inicializa un cliente LangChain para todos los proveedores (OpenAI, Gemini u Ollama), bajo una interfaz común de tipo `BaseChatModel`.
 
 ---
 
@@ -422,7 +422,7 @@ GENERATION_SYSTEM_MSG = (
 | `body` | Cuerpo completo en HTML semántico con `<h1>`, secciones `<h2>`, `<h3>`, `<pre><code>`, `<strong>`, `<em>`, FAQ con preguntas reales y conclusión con CTA | — |
 | `keywords` | Lista de 5-7 palabras clave SEO en minúsculas, incluyendo variaciones long-tail | sin repetir el título exacto |
 
-### Estrategia de llamada con fallback (LangChain + SDK directo)
+### Estrategia de llamada con fallback (LangChain + BaseChatModel)
 
 El script intenta en este orden:
 
@@ -434,10 +434,9 @@ El script intenta en este orden:
    → _generate_with_langchain()
    Si falla (error de red, timeout, etc.) →
 
-2. OpenAI SDK directo (para modelos OpenAI y Ollama):
-   client.chat.completions.create(model, messages)
-   → Chat Completions — endpoint estándar
-   (Ollama expone una API compatible con OpenAI)
+2. Fallback al cliente `BaseChatModel` inyectado:
+   client_ai.invoke([(system, ...), (human, ...)])
+   → Abstracción común en LangChain para todos los proveedores
 ```
 
 Ambas rutas tienen reintentos con **back-off exponencial** para errores transitorios (`ConnectionError`, `TimeoutError`).
