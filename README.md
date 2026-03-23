@@ -89,6 +89,7 @@ Abre `.env` con tu editor y configura el proveedor de IA que quieras usar (ver s
 | `SEND_EMAILS` | ❌ opcional | `true` | Activar/desactivar el envío de emails (`true`/`false`). Si es `false`, solo se imprime en consola. |
 | `NOTIFY_VERBOSE` | ❌ opcional | `true` | Enviar emails detallados (`true`/`false`). |
 | `SEND_PROMPT_EMAIL` | ❌ opcional | `false` | Enviar el prompt por email antes de llamar a la IA (útil para depuración). |
+| `OUTPUT_FILENAME` | ❌ opcional | `article.json` | Nombre (y ruta relativa) del fichero JSON de salida. Debe acabar en `.json` (p. ej. `output/my-article.json`). Sobreescribible con `--output` en CLI. |
 
 ### 3. Crear el entorno virtual e instalar dependencias
 

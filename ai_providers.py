@@ -1,3 +1,34 @@
+"""
+ai_providers.py
+---------------
+Abstracción de proveedores de IA para el generador de artículos.
+
+Responsabilidades:
+- Detectar qué proveedor de IA usar: OpenAI, Google Gemini u Ollama (local).
+- Construir y ejecutar cadenas LangChain LCEL (``prompt | llm | StrOutputParser``).
+- Extraer y parsear bloques JSON de las respuestas de la IA.
+- Implementar reintentos con back-off exponencial para errores transitorios.
+
+Proveedores soportados:
+    **OpenAI (GPT)**
+        Usa :class:`~langchain_openai.ChatOpenAI` con la clave ``OPENAIAPIKEY``.
+        Modelos: ``gpt-4o``, ``gpt-4-turbo``, ``gpt-3.5-turbo``, etc.
+
+    **Google Gemini**
+        Usa :class:`~langchain_google_genai.ChatGoogleGenerativeAI` con la clave
+        ``GEMINI_API_KEY``. Detectado cuando ``OPENAI_MODEL`` empieza por ``gemini-``
+        o cuando ``AI_PROVIDER=gemini``.
+
+    **Ollama (local)**
+        Usa :class:`~langchain_openai.ChatOpenAI` con ``base_url=OLLAMA_BASE_URL``
+        y una clave ficticia. No requiere clave de API. Detectado cuando
+        ``OLLAMA_BASE_URL`` está definida o cuando ``AI_PROVIDER=ollama``.
+
+Selección de proveedor:
+    La variable ``AI_PROVIDER`` (``config.py``) permite forzar un proveedor:
+    ``"auto"`` (por defecto), ``"openai"``, ``"gemini"`` u ``"ollama"``.
+    El argumento CLI ``--provider`` sobreescribe esta variable en tiempo de ejecución.
+"""
 from __future__ import annotations
 
 import json
@@ -19,8 +50,19 @@ logger = config.logger
 
 # ====== Utilidades de parseo/IA ======
 def _extract_json_block(text: str) -> str:
-    """
-    Extrae el primer bloque que parezca JSON del texto (soporta ```json ... ``` o texto suelto).
+    """Extrae el primer bloque JSON del texto de respuesta de la IA.
+
+    Soporta dos formatos habituales de respuesta:
+
+    1. **Bloque de código cercado**: ````json { ... }``` `` o ```` ``` { ... }``` ``.
+    2. **JSON suelto**: busca el primer ``{`` hasta el último ``}`` en el texto.
+
+    Args:
+        text: Texto de respuesta del modelo de IA.
+
+    Returns:
+        Cadena con el bloque JSON extraído y recortado, o cadena vacía si
+        *text* es ``None`` o vacío.
     """
     if not text:
         return ""
@@ -31,6 +73,22 @@ def _extract_json_block(text: str) -> str:
     return brace.group(0).strip() if brace else text.strip()
 
 def _safe_json_loads(s: str) -> dict:
+    """Parsea una cadena JSON con tolerancia a caracteres tipográficos.
+
+    Primer intento con :func:`json.loads` estándar. Si falla, reemplaza
+    las comillas tipográficas (``\u201c``, ``\u201d``) y la comilla
+    derecha (``\u2019``) por sus equivalentes ASCII y reintenta.
+
+    Args:
+        s: Cadena JSON a parsear (posiblemente con comillas tipográficas).
+
+    Returns:
+        Diccionario Python resultante del parseo.
+
+    Raises:
+        :class:`json.JSONDecodeError`: Si el JSON no es válido incluso tras
+        la sustitución de caracteres.
+    """
     try:
         return json.loads(s)
     except Exception:
@@ -38,11 +96,20 @@ def _safe_json_loads(s: str) -> dict:
         return json.loads(s2)
 
 def _is_gemini_model(model: str) -> bool:
-    """Devuelve True si el proveedor es Google Gemini.
+    """Determina si el proveedor de IA activo es Google Gemini.
 
-    Cuando ``AI_PROVIDER`` está definido como ``"gemini"`` se fuerza Gemini.
-    Cuando es ``"openai"`` u ``"ollama"`` se descarta Gemini.
-    Con ``"auto"`` (por defecto) se detecta por el nombre del modelo.
+    Lógica de detección (en orden de precedencia):
+
+    1. Si ``AI_PROVIDER == "gemini"`` → siempre ``True``.
+    2. Si ``AI_PROVIDER == "openai"`` o ``"ollama"`` → siempre ``False``.
+    3. Si ``AI_PROVIDER == "auto"`` → ``True`` cuando el nombre del modelo
+       empieza por ``"gemini"`` (insensible a mayúsculas).
+
+    Args:
+        model: Nombre del modelo de IA (p. ej. ``"gemini-2.0-flash"``).
+
+    Returns:
+        ``True`` si el proveedor activo es Google Gemini; ``False`` en caso contrario.
     """
     provider = config.AI_PROVIDER
     if provider == "gemini":
@@ -53,11 +120,17 @@ def _is_gemini_model(model: str) -> bool:
 
 
 def _is_ollama_provider() -> bool:
-    """Devuelve True si el proveedor es Ollama (servidor local).
+    """Determina si el proveedor de IA activo es Ollama (servidor LLM local).
 
-    Cuando ``AI_PROVIDER`` está definido como ``"ollama"`` se fuerza Ollama.
-    Cuando es ``"openai"`` o ``"gemini"`` se descarta Ollama.
-    Con ``"auto"`` (por defecto) se detecta por ``OLLAMA_BASE_URL``.
+    Lógica de detección (en orden de precedencia):
+
+    1. Si ``AI_PROVIDER == "ollama"`` → siempre ``True``.
+    2. Si ``AI_PROVIDER == "openai"`` o ``"gemini"`` → siempre ``False``.
+    3. Si ``AI_PROVIDER == "auto"`` → ``True`` cuando ``OLLAMA_BASE_URL``
+       tiene algún valor no vacío.
+
+    Returns:
+        ``True`` si el proveedor activo es Ollama; ``False`` en caso contrario.
     """
     provider = config.AI_PROVIDER
     if provider == "ollama":
@@ -100,12 +173,26 @@ def _generate_with_langchain(
     max_tokens: int,
     temperature: float = 0.7,
 ) -> str:
-    """
-    Invoca el modelo de lenguaje mediante LangChain usando LLMChain.
-    Usa ChatGoogleGenerativeAI para modelos Gemini, ChatOpenAI con base_url
-    para Ollama (servidor local) y ChatOpenAI estándar para modelos OpenAI/ChatGPT.
-    Devuelve el texto generado como string.
-    Lanza RuntimeError si la llamada falla o no devuelve contenido.
+    """Invoca el modelo de lenguaje activo mediante LangChain LCEL y devuelve el texto generado.
+
+    Construye la cadena ``prompt | llm | StrOutputParser()`` usando :class:`LLMChain` e
+    instancia el LLM apropiado según el proveedor detectado:
+
+    - **Gemini** → :class:`~langchain_google_genai.ChatGoogleGenerativeAI`
+    - **Ollama** → :class:`~langchain_openai.ChatOpenAI` con ``base_url=OLLAMA_BASE_URL``
+    - **OpenAI** → :class:`~langchain_openai.ChatOpenAI` con ``api_key=OPENAIAPIKEY``
+
+    Args:
+        system_msg:   Mensaje de sistema para el LLM (rol ``"system"``).
+        user_prompt:  Prompt del usuario (rol ``"human"``).
+        max_tokens:   Límite de tokens de salida del modelo.
+        temperature:  Temperatura de generación (por defecto ``0.7``).
+
+    Returns:
+        Texto generado por el modelo como cadena de texto.
+
+    Raises:
+        :class:`RuntimeError`: Si la llamada al LLM no devuelve contenido.
     """
     if _is_gemini_model(config.OPENAI_MODEL):
         llm = ChatGoogleGenerativeAI(
@@ -141,7 +228,27 @@ def _generate_with_langchain(
 
 # ========= Retry con back-off exponencial =========
 def _retry_with_backoff(fn: Callable, max_retries: int = config.OPENAI_MAX_RETRIES, base_delay: float = config.OPENAI_RETRY_BASE_DELAY) -> Any:
-    """Ejecuta *fn()* con reintentos y back-off exponencial. Reintenta solo errores transitorios."""
+    """Ejecuta *fn()* con reintentos y back-off exponencial.
+
+    Solo reintenta errores transitorios de red (:class:`ConnectionError`,
+    :class:`TimeoutError`). Cualquier otro tipo de excepción se propaga
+    inmediatamente sin reintentos.
+
+    Fórmula de espera: ``delay = base_delay × 2^(attempt - 1) + random(0, 1)``
+
+    Args:
+        fn:          Función sin argumentos a ejecutar.
+        max_retries: Número máximo de reintentos (por defecto ``OPENAI_MAX_RETRIES = 3``).
+        base_delay:  Segundos base para el back-off exponencial
+                     (por defecto ``OPENAI_RETRY_BASE_DELAY = 2``).
+
+    Returns:
+        El valor devuelto por *fn()* en el primer intento exitoso.
+
+    Raises:
+        :class:`RuntimeError`: Si se agotan todos los reintentos.
+        Cualquier excepción no transitoria que lance *fn()*.
+    """
     last_exc: Exception | None = None
     for attempt in range(1, max_retries + 1):
         try:
