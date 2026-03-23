@@ -950,6 +950,13 @@ class TestGenerateArticleWithAILangchain:
         with pytest.raises(ValueError):
             generate_article_with_ai(mock_client, "Cat", "Sub", "Tag")
 
+    @patch("article_generator._generate_with_langchain", return_value='{"title":"JWT","summary":"x","body":"<p>Texto sin cierre}')
+    def test_raises_actionable_error_on_invalid_json_from_ai(self, mock_lc):
+        """Invalid JSON from model raises RuntimeError with actionable parse details."""
+        mock_client = MagicMock()
+        with pytest.raises(RuntimeError, match=r"JSON inválido.*Unterminated string.*columna"):
+            generate_article_with_ai(mock_client, "Cat", "Sub", "Tag")
+
     @patch("article_generator.build_generation_prompt")
     @patch("article_generator._generate_with_langchain", return_value=_VALID_ARTICLE_JSON)
     def test_title_passed_to_prompt_builder(self, mock_lc, mock_prompt):
