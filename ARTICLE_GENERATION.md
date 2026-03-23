@@ -78,6 +78,7 @@ El script carga su configuración desde un fichero `.env` en el mismo directorio
 | `SEND_EMAILS` | ❌ | Si es `true` (por defecto), se envían emails; si es `false`, solo se imprime en consola |
 | `NOTIFY_VERBOSE` | ❌ | Si es `true` (por defecto), envía email en cada evento; si es `false`, solo en errores/avisos |
 | `SEND_PROMPT_EMAIL` | ❌ | Si es `true`, envía por email el prompt antes de llamar a la IA |
+| `OUTPUT_FILENAME` | ❌ | Nombre del fichero JSON de salida (por defecto `article.json`). Debe terminar en `.json`. Se puede sobreescribir con `--output` en CLI |
 
 ### Argumentos CLI
 

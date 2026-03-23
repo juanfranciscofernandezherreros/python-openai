@@ -1,3 +1,21 @@
+"""
+notifications.py
+----------------
+Sistema de notificaciones y envío de emails para el generador de artículos.
+
+Responsabilidades:
+- Enviar emails HTML via SMTP con autenticación STARTTLS.
+- Centralizar la impresión de mensajes de log en consola y el envío opcional
+  de emails de notificación según el nivel (``info``, ``success``, ``warning``,
+  ``error``) y la configuración de ``NOTIFY_VERBOSE``.
+
+Dependencias de entorno (todas opcionales para el envío de emails):
+    ``SEND_EMAILS``, ``SMTP_HOST``, ``SMTP_PORT``, ``SMTP_USER``,
+    ``SMTP_PASS``, ``FROM_EMAIL``, ``NOTIFY_EMAIL``.
+
+Si alguna de las variables SMTP no está configurada, las funciones de este
+módulo simplemente imprimen en consola sin lanzar excepciones.
+"""
 from __future__ import annotations
 
 import base64
@@ -11,6 +29,26 @@ from utils import html_escape, now_utc
 
 
 def send_notification_email(subject: str, html_body: str, text_body: str = None):
+    """Envía un email de notificación via SMTP con soporte STARTTLS.
+
+    El email se envía en formato multipart (texto plano + HTML). Usa
+    :class:`~email.message.EmailMessage` con ``policy=email.policy.SMTP``
+    para codificar automáticamente los encabezados no ASCII (RFC 2047).
+
+    Para contraseñas con caracteres no ASCII, realiza un fallback a
+    ``AUTH PLAIN`` con codificación Base64.
+
+    Si ``SEND_EMAILS`` es ``False`` o falta alguna variable SMTP, la función
+    imprime un aviso en consola y devuelve ``False`` sin lanzar excepciones.
+
+    Args:
+        subject:   Asunto del email.
+        html_body: Cuerpo del email en formato HTML.
+        text_body: Cuerpo alternativo en texto plano (por defecto: mensaje genérico).
+
+    Returns:
+        ``True`` si el email se envió correctamente; ``False`` en caso contrario.
+    """
     if not config.SEND_EMAILS:
         print("ℹ️  Envío de emails desactivado (SEND_EMAILS=false). Se omite el envío.")
         return False
@@ -46,9 +84,24 @@ def send_notification_email(subject: str, html_body: str, text_body: str = None)
         return False
 
 def notify(subject: str, message: str, level: str = "info", always_email: bool = True):
-    """
-    Centraliza impresión y envío de email. Si NOTIFY_VERBOSE es False,
-    sólo envía emails para level in ['error','warning'] salvo que always_email=True.
+    """Centraliza la impresión de mensajes en consola y el envío de notificaciones por email.
+
+    Imprime siempre el mensaje en consola con formato ``{emoji} [{timestamp_UTC}] {subject} :: {message}``.
+    Envía un email si se cumple alguna de estas condiciones:
+
+    - ``always_email=True`` (valor por defecto).
+    - ``NOTIFY_VERBOSE=True`` (configuración global).
+    - El nivel es ``"error"`` o ``"warning"`` (siempre se notifican los problemas).
+
+    Prefijos de emoji por nivel:
+        ``info`` → ℹ️  | ``success`` → ✅  | ``warning`` → ⚠️  | ``error`` → ❌
+
+    Args:
+        subject:      Asunto corto del evento (se usa también como asunto del email).
+        message:      Descripción detallada del evento.
+        level:        Nivel del mensaje: ``"info"``, ``"success"``, ``"warning"`` o ``"error"``.
+        always_email: Si ``True``, siempre intenta enviar email independientemente de
+                      ``NOTIFY_VERBOSE``. Por defecto ``True``.
     """
     stamp = now_utc().isoformat()
     prefix = {"info":"ℹ️","success":"✅","warning":"⚠️","error":"❌"}.get(level, "ℹ️")

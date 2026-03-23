@@ -1,3 +1,37 @@
+"""
+config.py
+---------
+Módulo de configuración centralizada del proyecto.
+
+Responsabilidades:
+- Carga las variables de entorno desde el fichero ``.env`` (vía ``python-dotenv``).
+- Define todas las constantes de comportamiento del generador: umbrales de similitud,
+  límites de reintentos, longitudes máximas de metadatos SEO, etc.
+- Expone el ``logger`` compartido que usan todos los submódulos.
+- Ofrece el mapa de idiomas soportados y la función auxiliar ``_language_name``.
+
+Variables de entorno reconocidas:
+    OPENAIAPIKEY            — Clave de API de OpenAI (obligatoria con modelos ``gpt-*``).
+    GEMINI_API_KEY          — Clave de API de Google Gemini (obligatoria con modelos ``gemini-*``).
+    OLLAMA_BASE_URL         — URL del servidor Ollama local (p. ej. ``http://localhost:11434/v1``).
+    OPENAI_MODEL            — Nombre del modelo de IA (por defecto ``gpt-4o``).
+    AI_PROVIDER             — Proveedor de IA: ``auto`` | ``openai`` | ``gemini`` | ``ollama``.
+    SITE                    — URL base del sitio web (p. ej. ``https://tusitio.com``).
+    AUTHOR_USERNAME         — Nombre del autor de los artículos (por defecto ``adminUser``).
+    ARTICLE_LANGUAGE        — Código ISO 639-1 del idioma (por defecto ``es``).
+    AI_TEMPERATURE_ARTICLE  — Temperatura de generación del artículo (por defecto ``0.7``).
+    AI_TEMPERATURE_TITLE    — Temperatura de generación del título (por defecto ``0.9``).
+    OUTPUT_FILENAME         — Nombre del fichero JSON de salida (por defecto ``article.json``).
+    SEND_EMAILS             — Activar/desactivar envío de emails (por defecto ``true``).
+    SMTP_HOST               — Servidor SMTP para notificaciones.
+    SMTP_PORT               — Puerto SMTP (por defecto ``587``).
+    SMTP_USER               — Usuario SMTP.
+    SMTP_PASS               — Contraseña SMTP.
+    FROM_EMAIL              — Dirección de origen del email.
+    NOTIFY_EMAIL            — Dirección de destino de las notificaciones.
+    NOTIFY_VERBOSE          — Enviar emails detallados (por defecto ``true``).
+    SEND_PROMPT_EMAIL       — Enviar el prompt por email antes de llamar a la IA (por defecto ``false``).
+"""
 from __future__ import annotations
 
 import logging
