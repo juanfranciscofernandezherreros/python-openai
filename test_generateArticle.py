@@ -884,13 +884,13 @@ class TestGenerateArticleWithAILangchain:
 
     @patch("article_generator._generate_with_langchain", return_value=_VALID_ARTICLE_JSON)
     def test_uses_langchain_primary_path(self, mock_lc):
-        """When LangChain succeeds the OpenAI SDK should not be called."""
+        """When LangChain succeeds the chat model fallback should not be called."""
         mock_client = MagicMock()
         title, summary, body, keywords = generate_article_with_ai(
             mock_client, "Spring Boot", "Core", "Spring Boot"
         )
         mock_lc.assert_called_once()
-        mock_client.chat.completions.create.assert_not_called()
+        mock_client.invoke.assert_not_called()
 
     @patch("article_generator._generate_with_langchain", return_value=_VALID_ARTICLE_JSON)
     def test_returns_tuple_of_four(self, mock_lc):
@@ -927,21 +927,19 @@ class TestGenerateArticleWithAILangchain:
         assert body.startswith("<h1>Mi título</h1>")
 
     @patch("article_generator._generate_with_langchain", side_effect=RuntimeError("LangChain error"))
-    def test_falls_back_to_openai_sdk_on_langchain_failure(self, mock_lc):
-        """When LangChain raises, the OpenAI SDK fallback must be invoked."""
+    def test_falls_back_to_chat_model_on_langchain_failure(self, mock_lc):
+        """When LangChain raises, the chat model fallback must be invoked."""
         mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content=_VALID_ARTICLE_JSON))]
-        )
+        mock_client.invoke.return_value = MagicMock(content=_VALID_ARTICLE_JSON)
         title, _, _, _ = generate_article_with_ai(mock_client, "Cat", "Sub", "Tag")
         assert title == "Cómo usar Spring Boot"
-        mock_client.chat.completions.create.assert_called_once()
+        mock_client.invoke.assert_called_once()
 
     @patch("article_generator._generate_with_langchain", side_effect=RuntimeError("fail"))
     def test_raises_if_both_langchain_and_sdk_fail(self, mock_lc):
-        """RuntimeError is raised when both LangChain and the OpenAI SDK fallback fail."""
+        """RuntimeError is raised when both LangChain and the chat model fallback fail."""
         mock_client = MagicMock()
-        mock_client.chat.completions.create.side_effect = RuntimeError("SDK also failed")
+        mock_client.invoke.side_effect = RuntimeError("SDK also failed")
         with pytest.raises(RuntimeError):
             generate_article_with_ai(mock_client, "Cat", "Sub", "Tag")
 
@@ -981,11 +979,11 @@ class TestGenerateTitleWithAILangchain:
 
     @patch("article_generator._generate_with_langchain", return_value="Título generado con LangChain")
     def test_uses_langchain_primary_path(self, mock_lc):
-        """When LangChain succeeds the OpenAI SDK should not be called."""
+        """When LangChain succeeds the chat model fallback should not be called."""
         mock_client = MagicMock()
         generate_title_with_ai(mock_client, "Cat", "Sub", "Tag")
         mock_lc.assert_called_once()
-        mock_client.chat.completions.create.assert_not_called()
+        mock_client.invoke.assert_not_called()
 
     @patch("article_generator._generate_with_langchain", return_value='  "Mi Título"  ')
     def test_strips_whitespace_and_quotes(self, mock_lc):
@@ -1004,21 +1002,19 @@ class TestGenerateTitleWithAILangchain:
         assert len(title) <= META_TITLE_MAX_LENGTH
 
     @patch("article_generator._generate_with_langchain", side_effect=RuntimeError("LangChain error"))
-    def test_falls_back_to_openai_sdk_on_langchain_failure(self, mock_lc):
-        """When LangChain raises, the OpenAI SDK fallback must be invoked."""
+    def test_falls_back_to_chat_model_on_langchain_failure(self, mock_lc):
+        """When LangChain raises, the chat model fallback must be invoked."""
         mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content="Título fallback"))]
-        )
+        mock_client.invoke.return_value = MagicMock(content="Título fallback")
         title = generate_title_with_ai(mock_client, "Cat", "Sub", "Tag")
         assert "Título fallback" in title
-        mock_client.chat.completions.create.assert_called_once()
+        mock_client.invoke.assert_called_once()
 
     @patch("article_generator._generate_with_langchain", side_effect=RuntimeError("fail"))
     def test_raises_if_both_langchain_and_sdk_fail(self, mock_lc):
-        """RuntimeError is raised when both LangChain and the OpenAI SDK fallback fail."""
+        """RuntimeError is raised when both LangChain and the chat model fallback fail."""
         mock_client = MagicMock()
-        mock_client.chat.completions.create.side_effect = RuntimeError("SDK also failed")
+        mock_client.invoke.side_effect = RuntimeError("SDK also failed")
         with pytest.raises(RuntimeError):
             generate_title_with_ai(mock_client, "Cat", "Sub", "Tag")
 
@@ -1192,10 +1188,10 @@ class TestMainCliProviderArg:
     """Tests for the --provider CLI argument in main()."""
 
     @patch("generateArticle.generate_and_save_article", return_value=True)
-    @patch("generateArticle.OpenAI")
+    @patch("generateArticle.ChatOpenAI")
     @patch("generateArticle.OPENAIAPIKEY", "fake-key")
     @patch("generateArticle.OPENAI_MODEL", "gpt-4o")
-    def test_provider_openai_sets_config(self, mock_openai_cls, mock_gen):
+    def test_provider_openai_sets_config(self, mock_chat_cls, mock_gen):
         """--provider openai should set config.AI_PROVIDER to 'openai'."""
         import sys
 
@@ -1238,10 +1234,10 @@ class TestMainCliProviderArg:
             _cfg.AI_PROVIDER = original
 
     @patch("generateArticle.generate_and_save_article", return_value=True)
-    @patch("generateArticle.OpenAI")
+    @patch("generateArticle.ChatOpenAI")
     @patch("generateArticle.OPENAI_MODEL", "llama3")
     @patch("config.AI_PROVIDER", "auto")
-    def test_provider_ollama_sets_config(self, mock_openai_cls, mock_gen):
+    def test_provider_ollama_sets_config(self, mock_chat_cls, mock_gen):
         """--provider ollama should set config.AI_PROVIDER to 'ollama'."""
         import sys
 
@@ -1327,12 +1323,12 @@ class TestMainCliOllama:
     """Tests for the main() CLI when Ollama is configured."""
 
     @patch("generateArticle.generate_and_save_article", return_value=True)
-    @patch("generateArticle.OpenAI")
+    @patch("generateArticle.ChatOpenAI")
     @patch("config.OLLAMA_BASE_URL", "http://localhost:11434/v1")
     @patch("generateArticle.OLLAMA_BASE_URL", "http://localhost:11434/v1")
     @patch("generateArticle.OPENAIAPIKEY", "")
     @patch("generateArticle.OPENAI_MODEL", "llama3")
-    def test_main_does_not_require_api_key_with_ollama(self, mock_openai_cls, mock_gen):
+    def test_main_does_not_require_api_key_with_ollama(self, mock_chat_cls, mock_gen):
         """main() should NOT exit when OPENAIAPIKEY is empty but OLLAMA_BASE_URL is set."""
         import sys
 
@@ -1342,50 +1338,58 @@ class TestMainCliOllama:
         mock_gen.assert_called_once()
 
     @patch("generateArticle.generate_and_save_article", return_value=True)
-    @patch("generateArticle.OpenAI")
+    @patch("generateArticle.ChatOpenAI")
     @patch("config.OLLAMA_BASE_URL", "http://localhost:11434/v1")
     @patch("generateArticle.OLLAMA_BASE_URL", "http://localhost:11434/v1")
     @patch("generateArticle.OPENAIAPIKEY", "")
     @patch("generateArticle.OPENAI_MODEL", "llama3")
-    def test_main_initializes_openai_client_with_base_url(self, mock_openai_cls, mock_gen):
-        """main() should create the OpenAI client with base_url pointing to Ollama."""
+    def test_main_initializes_openai_client_with_base_url(self, mock_chat_cls, mock_gen):
+        """main() should create the ChatOpenAI client with base_url pointing to Ollama."""
         import sys
 
         from generateArticle import main
         with patch.object(sys, "argv", ["generateArticle.py", "--category", "Spring Boot", "--tag", "Lombok"]):
             main()
-        mock_openai_cls.assert_called_once_with(base_url="http://localhost:11434/v1", api_key=OLLAMA_PLACEHOLDER_API_KEY)
+        mock_chat_cls.assert_called_once_with(
+            model="llama3",
+            base_url="http://localhost:11434/v1",
+            api_key=OLLAMA_PLACEHOLDER_API_KEY,
+            max_tokens=OPENAI_MAX_ARTICLE_TOKENS,
+            temperature=0.7,
+        )
 
 
-# ---- Gemini: CLI main() — client_ai is None ----
+# ---- Gemini: CLI main() — client_ai is ChatGoogleGenerativeAI ----
 class TestMainCliGemini:
     """Tests for the main() CLI when Gemini is configured."""
 
     @patch("generateArticle.generate_and_save_article", return_value=True)
-    @patch("generateArticle.OpenAI")
+    @patch("generateArticle.ChatOpenAI")
     @patch("generateArticle.GEMINI_API_KEY", "fake-gemini-key")
     @patch("generateArticle.OPENAI_MODEL", "gemini-2.0-flash")
-    def test_main_does_not_create_openai_client_for_gemini(self, mock_openai_cls, mock_gen):
-        """main() should NOT instantiate OpenAI() when Gemini is the provider."""
+    def test_main_does_not_create_openai_client_for_gemini(self, mock_chat_cls, mock_gen):
+        """main() should NOT instantiate ChatOpenAI() when Gemini is the provider."""
         import sys
 
         from generateArticle import main
         with patch.object(sys, "argv", ["generateArticle.py", "--category", "Spring Boot", "--tag", "Lombok"]):
             main()
-        mock_openai_cls.assert_not_called()
+        mock_chat_cls.assert_not_called()
 
     @patch("generateArticle.generate_and_save_article", return_value=True)
     @patch("generateArticle.GEMINI_API_KEY", "fake-gemini-key")
     @patch("generateArticle.OPENAI_MODEL", "gemini-2.0-flash")
-    def test_main_passes_none_client_for_gemini(self, mock_gen):
-        """main() should pass client_ai=None to generate_and_save_article for Gemini."""
+    @patch("generateArticle.ChatGoogleGenerativeAI")
+    def test_main_passes_langchain_client_for_gemini(self, mock_google_cls, mock_gen):
+        """main() should pass a ChatGoogleGenerativeAI client to generate_and_save_article for Gemini."""
         import sys
 
         from generateArticle import main
         with patch.object(sys, "argv", ["generateArticle.py", "--category", "Spring Boot", "--tag", "Lombok"]):
             main()
+        mock_google_cls.assert_called_once()
         _, kwargs = mock_gen.call_args
-        assert kwargs["client_ai"] is None
+        assert kwargs["client_ai"] is mock_google_cls.return_value
 
 
 # ---- Ollama: no Gemini interference ----
@@ -1396,27 +1400,23 @@ class TestOllamaNoGeminiInterference:
     @patch("config.OLLAMA_BASE_URL", "http://localhost:11434/v1")
     @patch("config.OPENAI_MODEL", "llama3")
     def test_article_uses_sdk_fallback_for_ollama(self, mock_lc):
-        """For Ollama, OpenAI SDK fallback should be used when LangChain fails."""
+        """For Ollama, chat model fallback should be used when LangChain fails."""
         mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content=_VALID_ARTICLE_JSON))]
-        )
+        mock_client.invoke.return_value = MagicMock(content=_VALID_ARTICLE_JSON)
         title, _, _, _ = generate_article_with_ai(mock_client, "Cat", "Sub", "Tag")
         assert title == "Cómo usar Spring Boot"
-        mock_client.chat.completions.create.assert_called_once()
+        mock_client.invoke.assert_called_once()
 
     @patch("article_generator._generate_with_langchain", side_effect=RuntimeError("LangChain fail"))
     @patch("config.OLLAMA_BASE_URL", "http://localhost:11434/v1")
     @patch("config.OPENAI_MODEL", "llama3")
     def test_title_uses_sdk_fallback_for_ollama(self, mock_lc):
-        """For Ollama, OpenAI SDK fallback should be used when LangChain fails."""
+        """For Ollama, chat model fallback should be used when LangChain fails."""
         mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content="Título de Ollama"))]
-        )
+        mock_client.invoke.return_value = MagicMock(content="Título de Ollama")
         title = generate_title_with_ai(mock_client, "Cat", "Sub", "Tag")
         assert "Título de Ollama" in title
-        mock_client.chat.completions.create.assert_called_once()
+        mock_client.invoke.assert_called_once()
 
 
 # ---- LLMChain class ----
@@ -1505,27 +1505,27 @@ class TestTemperatureConstants:
         assert call_kwargs["temperature"] == 0.2
 
 
-# ---- Gemini: no OpenAI SDK fallback ----
+# ---- Gemini: no chat model fallback ----
 class TestGeminiNoOpenAIFallback:
-    """When a Gemini model is configured, the OpenAI SDK fallback must not be called."""
+    """When a Gemini model is configured, the chat model fallback must not be called."""
 
     @patch("article_generator._generate_with_langchain", side_effect=RuntimeError("LangChain fail"))
     @patch("config.OPENAI_MODEL", "gemini-1.5-flash")
     def test_article_raises_without_openai_fallback_for_gemini(self, mock_lc):
-        """For Gemini models, RuntimeError is raised when LangChain fails (no OpenAI SDK fallback)."""
+        """For Gemini models, RuntimeError is raised when LangChain fails (no chat model fallback)."""
         mock_client = MagicMock()
         with pytest.raises(RuntimeError):
             generate_article_with_ai(mock_client, "Cat", "Sub", "Tag")
-        mock_client.chat.completions.create.assert_not_called()
+        mock_client.invoke.assert_not_called()
 
     @patch("article_generator._generate_with_langchain", side_effect=RuntimeError("LangChain fail"))
     @patch("config.OPENAI_MODEL", "gemini-1.5-flash")
     def test_title_raises_without_openai_fallback_for_gemini(self, mock_lc):
-        """For Gemini models, RuntimeError is raised when LangChain fails (no OpenAI SDK fallback)."""
+        """For Gemini models, RuntimeError is raised when LangChain fails (no chat model fallback)."""
         mock_client = MagicMock()
         with pytest.raises(RuntimeError):
             generate_title_with_ai(mock_client, "Cat", "Sub", "Tag")
-        mock_client.chat.completions.create.assert_not_called()
+        mock_client.invoke.assert_not_called()
 
     @patch("article_generator._generate_with_langchain", side_effect=RuntimeError("Invalid API key"))
     @patch("config.OPENAI_MODEL", "gemini-2.0-flash")
@@ -1709,7 +1709,7 @@ class TestGenerateAndSaveArticle:
     def test_raises_on_ai_failure(self, mock_lc):
         """generate_and_save_article raises RuntimeError when AI generation fails."""
         mock_client = MagicMock()
-        mock_client.chat.completions.create.side_effect = RuntimeError("SDK fail")
+        mock_client.invoke.side_effect = RuntimeError("SDK fail")
         with pytest.raises(RuntimeError):
             generate_and_save_article(
                 mock_client, "Spring Boot", "Cat", "Sub",
@@ -1787,10 +1787,10 @@ class TestMainCli:
     """Tests for the argparse-based main() function."""
 
     @patch("generateArticle.generate_and_save_article", return_value=True)
-    @patch("generateArticle.OpenAI")
+    @patch("generateArticle.ChatOpenAI")
     @patch("generateArticle.OPENAIAPIKEY", "fake-key")
     @patch("generateArticle.OPENAI_MODEL", "gpt-4o")
-    def test_main_calls_generate_with_tag_arg(self, mock_openai_cls, mock_gen):
+    def test_main_calls_generate_with_tag_arg(self, mock_chat_cls, mock_gen):
         """main() must call generate_and_save_article with the --tag argument."""
         import sys
 
@@ -1802,10 +1802,10 @@ class TestMainCli:
         assert kwargs["tag_text"] == "Spring Boot"
 
     @patch("generateArticle.generate_and_save_article", return_value=True)
-    @patch("generateArticle.OpenAI")
+    @patch("generateArticle.ChatOpenAI")
     @patch("generateArticle.OPENAIAPIKEY", "fake-key")
     @patch("generateArticle.OPENAI_MODEL", "gpt-4o")
-    def test_main_passes_category_and_subcategory(self, mock_openai_cls, mock_gen):
+    def test_main_passes_category_and_subcategory(self, mock_chat_cls, mock_gen):
         """main() must pass --category and --subcategory to generate_and_save_article."""
         import sys
 
@@ -1822,10 +1822,10 @@ class TestMainCli:
         assert kwargs["subcat_name"] == "Lombok"
 
     @patch("generateArticle.generate_and_save_article", return_value=True)
-    @patch("generateArticle.OpenAI")
+    @patch("generateArticle.ChatOpenAI")
     @patch("generateArticle.OPENAIAPIKEY", "fake-key")
     @patch("generateArticle.OPENAI_MODEL", "gpt-4o")
-    def test_main_passes_output_path(self, mock_openai_cls, mock_gen):
+    def test_main_passes_output_path(self, mock_chat_cls, mock_gen):
         """main() must pass the --output argument as output_path."""
         import sys
 
@@ -1841,11 +1841,11 @@ class TestMainCli:
         assert kwargs["output_path"] == "/tmp/test_output.json"
 
     @patch("generateArticle.generate_and_save_article", return_value=True)
-    @patch("generateArticle.OpenAI")
+    @patch("generateArticle.ChatOpenAI")
     @patch("generateArticle.OPENAIAPIKEY", "fake-key")
     @patch("generateArticle.OPENAI_MODEL", "gpt-4o")
     @patch("generateArticle.OUTPUT_FILENAME", "env_output.json")
-    def test_main_uses_output_filename_env_var_as_default(self, mock_openai_cls, mock_gen):
+    def test_main_uses_output_filename_env_var_as_default(self, mock_chat_cls, mock_gen):
         """main() must use OUTPUT_FILENAME as default for --output when not provided via CLI."""
         import sys
 
@@ -1860,10 +1860,10 @@ class TestMainCli:
         assert kwargs["output_path"] == "env_output.json"
 
     @patch("generateArticle.generate_and_save_article", return_value=True)
-    @patch("generateArticle.OpenAI")
+    @patch("generateArticle.ChatOpenAI")
     @patch("generateArticle.OPENAIAPIKEY", "fake-key")
     @patch("generateArticle.OPENAI_MODEL", "gpt-4o")
-    def test_main_passes_language(self, mock_openai_cls, mock_gen):
+    def test_main_passes_language(self, mock_chat_cls, mock_gen):
         """main() must pass the --language argument to generate_and_save_article."""
         import sys
 
@@ -1879,10 +1879,10 @@ class TestMainCli:
         assert kwargs["language"] == "en"
 
     @patch("generateArticle.generate_and_save_article", return_value=True)
-    @patch("generateArticle.OpenAI")
+    @patch("generateArticle.ChatOpenAI")
     @patch("generateArticle.OPENAIAPIKEY", "fake-key")
     @patch("generateArticle.OPENAI_MODEL", "gpt-4o")
-    def test_main_parses_avoid_titles(self, mock_openai_cls, mock_gen):
+    def test_main_parses_avoid_titles(self, mock_chat_cls, mock_gen):
         """main() must parse semicolon-separated --avoid-titles into a list."""
         import sys
 
@@ -1912,10 +1912,10 @@ class TestMainCli:
         assert exc_info.value.code == 1
 
     @patch("generateArticle.generate_and_save_article", return_value=True)
-    @patch("generateArticle.OpenAI")
+    @patch("generateArticle.ChatOpenAI")
     @patch("generateArticle.OPENAIAPIKEY", "fake-key")
     @patch("generateArticle.OPENAI_MODEL", "gpt-4o")
-    def test_main_passes_username_arg(self, mock_openai_cls, mock_gen):
+    def test_main_passes_username_arg(self, mock_chat_cls, mock_gen):
         """main() must pass --username to generate_and_save_article as author_name."""
         import sys
 
@@ -1931,10 +1931,10 @@ class TestMainCli:
         assert kwargs["author_name"] == "myUser"
 
     @patch("generateArticle.generate_and_save_article", return_value=True)
-    @patch("generateArticle.OpenAI")
+    @patch("generateArticle.ChatOpenAI")
     @patch("generateArticle.OPENAIAPIKEY", "fake-key")
     @patch("generateArticle.OPENAI_MODEL", "gpt-4o")
-    def test_main_passes_author_alias(self, mock_openai_cls, mock_gen):
+    def test_main_passes_author_alias(self, mock_chat_cls, mock_gen):
         """--author must work as a backward-compatible alias for --username."""
         import sys
 
@@ -1950,10 +1950,10 @@ class TestMainCli:
         assert kwargs["author_name"] == "legacyUser"
 
     @patch("generateArticle.generate_and_save_article", return_value=True)
-    @patch("generateArticle.OpenAI")
+    @patch("generateArticle.ChatOpenAI")
     @patch("generateArticle.OPENAIAPIKEY", "fake-key")
     @patch("generateArticle.OPENAI_MODEL", "gpt-4o")
-    def test_main_passes_site_arg(self, mock_openai_cls, mock_gen):
+    def test_main_passes_site_arg(self, mock_chat_cls, mock_gen):
         """main() must pass --site to generate_and_save_article."""
         import sys
 
@@ -1969,10 +1969,10 @@ class TestMainCli:
         assert kwargs["site"] == "https://myblog.com"
 
     @patch("generateArticle.generate_and_save_article", return_value=True)
-    @patch("generateArticle.OpenAI")
+    @patch("generateArticle.ChatOpenAI")
     @patch("generateArticle.OPENAIAPIKEY", "fake-key")
     @patch("generateArticle.OPENAI_MODEL", "gpt-4o")
-    def test_main_passes_title_arg(self, mock_openai_cls, mock_gen):
+    def test_main_passes_title_arg(self, mock_chat_cls, mock_gen):
         """main() must pass --title to generate_and_save_article."""
         import sys
 
@@ -1988,10 +1988,10 @@ class TestMainCli:
         assert kwargs["title"] == "Mi Título Personalizado"
 
     @patch("generateArticle.generate_and_save_article", return_value=True)
-    @patch("generateArticle.OpenAI")
+    @patch("generateArticle.ChatOpenAI")
     @patch("generateArticle.OPENAIAPIKEY", "fake-key")
     @patch("generateArticle.OPENAI_MODEL", "gpt-4o")
-    def test_main_title_default_is_none(self, mock_openai_cls, mock_gen):
+    def test_main_title_default_is_none(self, mock_chat_cls, mock_gen):
         """main() must pass title=None when --title is not provided."""
         import sys
 
@@ -2006,10 +2006,10 @@ class TestMainCli:
         assert kwargs["title"] is None
 
     @patch("generateArticle.generate_and_save_article", return_value=True)
-    @patch("generateArticle.OpenAI")
+    @patch("generateArticle.ChatOpenAI")
     @patch("generateArticle.OPENAIAPIKEY", "fake-key")
     @patch("generateArticle.OPENAI_MODEL", "gpt-4o")
-    def test_main_category_is_required(self, mock_openai_cls, mock_gen):
+    def test_main_category_is_required(self, mock_chat_cls, mock_gen):
         """main() must exit with error when --category is not provided."""
         import sys
 
@@ -2020,10 +2020,10 @@ class TestMainCli:
         assert exc_info.value.code == 2  # argparse exits with code 2 for missing required args
 
     @patch("generateArticle.generate_and_save_article", return_value=True)
-    @patch("generateArticle.OpenAI")
+    @patch("generateArticle.ChatOpenAI")
     @patch("generateArticle.OPENAIAPIKEY", "fake-key")
     @patch("generateArticle.OPENAI_MODEL", "gpt-4o")
-    def test_main_tag_defaults_to_none(self, mock_openai_cls, mock_gen):
+    def test_main_tag_defaults_to_none(self, mock_chat_cls, mock_gen):
         """main() must pass tag_text=None when --tag is not provided."""
         import sys
 
@@ -2244,10 +2244,10 @@ class TestMainSequentialCli:
     """Tests for the --sequential CLI argument in main()."""
 
     @patch("generateArticle.generate_and_save_article", return_value=True)
-    @patch("generateArticle.OpenAI")
+    @patch("generateArticle.ChatOpenAI")
     @patch("generateArticle.OPENAIAPIKEY", "fake-key")
     @patch("generateArticle.OPENAI_MODEL", "gpt-4o")
-    def test_sequential_mode_reads_json_file(self, mock_openai_cls, mock_gen):
+    def test_sequential_mode_reads_json_file(self, mock_chat_cls, mock_gen):
         """--sequential reads a JSON array file and calls generate_and_save_article for each entry."""
         import sys
         import tempfile
@@ -2318,10 +2318,10 @@ class TestMainSequentialCli:
         assert exc_info.value.code == 1
 
     @patch("generateArticle.generate_and_save_article", return_value=True)
-    @patch("generateArticle.OpenAI")
+    @patch("generateArticle.ChatOpenAI")
     @patch("generateArticle.OPENAIAPIKEY", "fake-key")
     @patch("generateArticle.OPENAI_MODEL", "gpt-4o")
-    def test_sequential_mode_cli_category_as_fallback(self, mock_openai_cls, mock_gen):
+    def test_sequential_mode_cli_category_as_fallback(self, mock_chat_cls, mock_gen):
         """In --sequential mode, --category CLI arg is used as fallback for items without category."""
         import sys
         import tempfile

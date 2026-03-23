@@ -687,14 +687,14 @@ Además, **te avisa por correo electrónico** de todo lo que hace:
 
 ## 🏗️ Diagrama de arquitectura
 
-`generateArticle.py` actúa como **fachada CLI** que re-exporta todos los símbolos de **8 submódulos** especializados. La generación de artículos usa **LangChain Expression Language (LCEL)** como capa principal: `ChatPromptTemplate | llm | StrOutputParser()` (encapsulado en la clase `LLMChain` del proyecto), con fallback al SDK de OpenAI en caso de error. Los proveedores soportados son OpenAI, Google Gemini y Ollama.
+`generateArticle.py` actúa como **fachada CLI** que re-exporta todos los símbolos de **8 submódulos** especializados. La generación de artículos usa **LangChain Expression Language (LCEL)** como capa principal: `ChatPromptTemplate | llm | StrOutputParser()` (encapsulado en la clase `LLMChain` del proyecto), con fallback a un cliente `BaseChatModel` de LangChain en caso de error. Los proveedores soportados son OpenAI, Google Gemini y Ollama.
 
 ```mermaid
 flowchart TD
     A["⏰ Scheduler\n(K8s CronJob / Cloud Scheduler)"] -->|"Cada lunes 08:00 Madrid"| B
     B["🐍 generateArticle.py\n--category --tag --subcategory"] --> C["🔍 Validación\n(.env + clave API)\n[config.py]"]
     C --> D["🧩 Submódulos\nconfig · utils · html_utils\nseo · notifications\nprompts · ai_providers\narticle_generator"]
-    D --> F["🤖 LangChain LCEL\n(ChatPromptTemplate | llm | StrOutputParser)\n→ OpenAI / Gemini / Ollama\n[fallback: OpenAI SDK directo]\n[ai_providers.py]"]
+    D --> F["🤖 LangChain LCEL\n(ChatPromptTemplate | llm | StrOutputParser)\n→ OpenAI / Gemini / Ollama\n[fallback: BaseChatModel.invoke]\n[ai_providers.py]"]
     F -->|"Título + Body + Keywords + FAQ"| G["📝 Post-procesado SEO\n(metaTitle, canonicalUrl,\nJSON-LD, Open Graph)\n[seo.py · html_utils.py]"]
     G --> H["💾 Fichero JSON local\n(article.json)\n[article_generator.py]"]
     H --> I["📧 Notificación email\n(SMTP)\n[notifications.py]"]
@@ -719,7 +719,7 @@ generateArticle.py  (fachada CLI + re-exportaciones)
        ├── seo.py             → SEO (canonical URL, JSON-LD Schema.org)
        ├── notifications.py   → Notificaciones y email SMTP
        ├── prompts.py         → Construcción de prompts para la IA
-       ├── ai_providers.py    → Proveedores IA (LangChain LCEL + fallback SDK)
+       ├── ai_providers.py    → Proveedores IA (LangChain LCEL + fallback BaseChatModel)
        └── article_generator.py → Generación y guardado del artículo
 ```
 
@@ -734,7 +734,7 @@ generateArticle.py --category ... --tag ... --subcategory ...
   │         ↓                                               │
   │    LangChain LCEL (ChatPromptTemplate | llm | Parser)  │
   │    → OpenAI / Gemini / Ollama                          │
-  │    [fallback: OpenAI SDK directo]                      │
+  │    [fallback: BaseChatModel.invoke]                    │
   │         ↓                                               │
   │    SEO post-procesado                                   │
   │         ↓                                               │
