@@ -116,7 +116,7 @@ OPENAI_RETRY_BASE_DELAY      = int(os.getenv("OPENAI_RETRY_BASE_DELAY",      "2"
 META_TITLE_MAX_LENGTH        = int(os.getenv("META_TITLE_MAX_LENGTH",        "60"))        # máx. caracteres para metaTitle SEO
 META_DESCRIPTION_MAX_LENGTH  = int(os.getenv("META_DESCRIPTION_MAX_LENGTH",  "160"))       # máx. caracteres para metaDescription SEO
 MAX_AVOID_TITLES_IN_PROMPT   = int(os.getenv("MAX_AVOID_TITLES_IN_PROMPT",   "5"))         # máx. títulos a incluir en el prompt (mantiene prompts cortos)
-OPENAI_MAX_ARTICLE_TOKENS    = int(os.getenv("OPENAI_MAX_ARTICLE_TOKENS",    "4096"))      # límite de tokens de salida para artículos
+OPENAI_MAX_ARTICLE_TOKENS    = int(os.getenv("OPENAI_MAX_ARTICLE_TOKENS",    "8096"))      # límite de tokens de salida para artículos
 OPENAI_MAX_TITLE_TOKENS      = int(os.getenv("OPENAI_MAX_TITLE_TOKENS",      "100"))       # límite de tokens de salida para títulos
 OLLAMA_PLACEHOLDER_API_KEY   = os.getenv("OLLAMA_PLACEHOLDER_API_KEY", "ollama")          # clave ficticia para Ollama (no requiere autenticación)
 
