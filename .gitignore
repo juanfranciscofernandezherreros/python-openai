@@ -1,19 +1,9 @@
-# Ignorar archivo de variables de entorno
-.env
-.env.*
-!.env.example
+# IntelliJ
+.idea/
+*.iml
 
-# Kubernetes – ignorar ficheros de secretos con valores reales
-# (renombra k8s/secret.yaml con valores reales a k8s/secret.local.yaml)
-k8s/secret.local.yaml
+# Build outputs
+**/target/
 
-# Virtual environment
-.venv/
-
-# Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-dist/
-build/
-.pytest_cache/
+# OS files
+.DS_Store
