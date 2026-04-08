@@ -115,6 +115,16 @@ public class ArticleGeneratorProperties {
     /** Maximum number of avoid-titles included in the AI prompt. Default: {@code 5}. */
     private int maxAvoidTitlesInPrompt = 5;
 
+    // ── JSON output ───────────────────────────────────────────────────────
+
+    /**
+     * Directory path where the generated article JSON file will be written after each call.
+     * The filename is {@code {slug}.json}. When blank or {@code null}, no file is written.
+     *
+     * <p>Example: {@code article-generator.output-dir=/tmp/articles}
+     */
+    private String outputDir;
+
     // ── System messages ───────────────────────────────────────────────────
 
     /**
@@ -187,6 +197,9 @@ public class ArticleGeneratorProperties {
 
     public int getMaxAvoidTitlesInPrompt() { return maxAvoidTitlesInPrompt; }
     public void setMaxAvoidTitlesInPrompt(int maxAvoidTitlesInPrompt) { this.maxAvoidTitlesInPrompt = maxAvoidTitlesInPrompt; }
+
+    public String getOutputDir() { return outputDir; }
+    public void setOutputDir(String outputDir) { this.outputDir = outputDir; }
 
     public String getGenerationSystemMsg() { return generationSystemMsg; }
     public void setGenerationSystemMsg(String generationSystemMsg) { this.generationSystemMsg = generationSystemMsg; }

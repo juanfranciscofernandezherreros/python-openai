@@ -393,6 +393,20 @@ Todas las propiedades tienen el prefijo `article-generator`.
 | `generation-system-msg` | `String` | Sobreescribe el mensaje de sistema para la generación del artículo |
 | `title-system-msg` | `String` | Sobreescribe el mensaje de sistema para la regeneración del título |
 
+### Salida JSON
+
+| Propiedad | Tipo | Defecto | Descripción |
+|-----------|------|---------|-------------|
+| `output-dir` | `String` | — | Directorio donde se escribe el artículo como `{slug}.json` tras cada generación. Si está vacío o no se configura, no se escribe ningún fichero. |
+
+Ejemplo:
+```yaml
+article-generator:
+  output-dir: /var/output/articles
+```
+
+El fichero resultante se llamará `{slug}.json` (p.e. `introduccion-a-spring-boot.json`) y contendrá el objeto `Article` completo serializado con formato legible (pretty-print).
+
 ---
 
 ## Algoritmo de deduplicación de títulos

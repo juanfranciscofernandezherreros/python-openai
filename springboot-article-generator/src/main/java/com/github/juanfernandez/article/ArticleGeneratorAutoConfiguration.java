@@ -125,8 +125,9 @@ public class ArticleGeneratorAutoConfiguration {
             AiClientService aiClientService,
             PromptBuilderService promptBuilderService,
             SeoService seoService,
-            TextUtils textUtils) {
+            TextUtils textUtils,
+            ObjectMapper objectMapper) {
         return new ArticleGeneratorService(
-                properties, aiClientService, promptBuilderService, seoService, textUtils);
+                properties, aiClientService, promptBuilderService, seoService, textUtils, objectMapper);
     }
 }
