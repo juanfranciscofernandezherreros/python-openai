@@ -1,10 +1,10 @@
-package com.github.juanfernandez.article.model;
+package com.github.juanfernandez.article.article.domain;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Input DTO for article generation requests.
+ * Input command / value object for article generation requests.
  *
  * <p>Only {@code category} is mandatory. All other fields are optional and fall back to the
  * values configured in {@code ArticleGeneratorProperties}.

@@ -1,7 +1,7 @@
-package com.github.juanfernandez.article.model;
+package com.github.juanfernandez.article.shared.ai;
 
 /**
- * Supported AI providers for article generation.
+ * Supported AI providers for content generation.
  *
  * <ul>
  *   <li>{@link #AUTO}      — Auto-detect: Gemini if model starts with {@code gemini-},

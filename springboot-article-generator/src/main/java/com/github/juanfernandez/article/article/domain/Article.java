@@ -1,4 +1,4 @@
-package com.github.juanfernandez.article.model;
+package com.github.juanfernandez.article.article.domain;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 

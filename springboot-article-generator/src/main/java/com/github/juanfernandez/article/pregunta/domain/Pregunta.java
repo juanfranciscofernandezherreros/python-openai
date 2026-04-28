@@ -1,4 +1,4 @@
-package com.github.juanfernandez.article.model;
+package com.github.juanfernandez.article.pregunta.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

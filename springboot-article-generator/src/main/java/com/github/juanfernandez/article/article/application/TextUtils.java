@@ -1,4 +1,4 @@
-package com.github.juanfernandez.article.service;
+package com.github.juanfernandez.article.article.application;
 
 import java.text.Normalizer;
 import java.util.List;
@@ -33,15 +33,10 @@ public class TextUtils {
      */
     public String slugify(String text) {
         if (text == null || text.isBlank()) return "";
-        // 1. NFD normalise
         String normalised = Normalizer.normalize(text, Normalizer.Form.NFD);
-        // 2. Remove combining marks (accents, tildes, etc.)
         normalised = normalised.replaceAll("\\p{M}", "");
-        // 3. Lowercase
         normalised = normalised.toLowerCase().strip();
-        // 4. Replace non-alphanumeric sequences with hyphen
         normalised = normalised.replaceAll("[^a-z0-9]+", "-");
-        // 5. Strip leading/trailing hyphens
         return normalised.replaceAll("^-+|-+$", "");
     }
 
@@ -73,7 +68,6 @@ public class TextUtils {
         String bNorm = normaliseForSimilarity(b);
         if (aNorm.isEmpty() || bNorm.isEmpty()) return 0.0;
 
-        // Longest Common Subsequence length via dynamic programming
         char[] aChars = aNorm.toCharArray();
         char[] bChars = bNorm.toCharArray();
         int m = aChars.length;
@@ -89,7 +83,6 @@ public class TextUtils {
             }
         }
         int lcs = dp[m][n];
-        // Ratio = 2 * LCS / (|a| + |b|) — same formula as Python's SequenceMatcher.ratio()
         return (2.0 * lcs) / (m + n);
     }
 

@@ -1,6 +1,7 @@
 package com.github.juanfernandez.article.service;
 
-import com.github.juanfernandez.article.config.ArticleGeneratorProperties;
+import com.github.juanfernandez.article.shared.config.ArticleGeneratorProperties;
+import com.github.juanfernandez.article.article.application.PromptBuilderService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

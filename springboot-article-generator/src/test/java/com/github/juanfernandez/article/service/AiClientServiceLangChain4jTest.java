@@ -1,8 +1,9 @@
 package com.github.juanfernandez.article.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.juanfernandez.article.config.ArticleGeneratorProperties;
-import com.github.juanfernandez.article.model.AiProvider;
+import com.github.juanfernandez.article.shared.config.ArticleGeneratorProperties;
+import com.github.juanfernandez.article.shared.ai.AiProvider;
+import com.github.juanfernandez.article.shared.ai.AiClientAdapter;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.model.chat.ChatModel;
@@ -15,12 +16,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 /**
- * Unit tests for {@link AiClientService} verifying that LangChain4j {@link ChatModel}
+ * Unit tests for {@link AiClientAdapter} verifying that LangChain4j {@link ChatModel}
  * is used for all four AI providers (OpenAI, Gemini, Ollama, Anthropic) when a bean is available.
  */
 class AiClientServiceLangChain4jTest {
 
-    private AiClientService service;
+    private AiClientAdapter service;
     private ChatModel mockModel;
     private ArticleGeneratorProperties properties;
 
@@ -28,7 +29,7 @@ class AiClientServiceLangChain4jTest {
     void setUp() {
         properties = new ArticleGeneratorProperties();
         mockModel = mock(ChatModel.class);
-        service = new AiClientService(properties, new ObjectMapper(), mockModel);
+        service = new AiClientAdapter(properties, new ObjectMapper(), mockModel);
     }
 
     // ── Helper ────────────────────────────────────────────────────────────
@@ -100,7 +101,7 @@ class AiClientServiceLangChain4jTest {
     @Test
     void generate_throwsDescriptiveErrorForAnthropicWithoutLangChain4j() {
         // Without LangChain4j bean, ANTHROPIC provider should throw a helpful error
-        AiClientService noLc4jService = new AiClientService(properties, new ObjectMapper());
+        AiClientAdapter noLc4jService = new AiClientAdapter(properties, new ObjectMapper());
         properties.setProvider(AiProvider.ANTHROPIC);
 
         RuntimeException ex = assertThrows(RuntimeException.class,
@@ -129,7 +130,7 @@ class AiClientServiceLangChain4jTest {
     @Test
     void generate_withoutLangChain4jFallsBackToRestPathForOpenAi() {
         // Without LangChain4j, service is created with the two-arg constructor (chatModel == null)
-        AiClientService noLc4jService = new AiClientService(properties, new ObjectMapper());
+        AiClientAdapter noLc4jService = new AiClientAdapter(properties, new ObjectMapper());
 
         // The service should take the REST fallback path, which will fail attempting a real
         // HTTP call with a null/blank API key. A RuntimeException (not NPE) is expected.

@@ -1,9 +1,9 @@
-package com.github.juanfernandez.article.service;
+package com.github.juanfernandez.article.shared.ai;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.juanfernandez.article.config.ArticleGeneratorProperties;
-import com.github.juanfernandez.article.model.AiProvider;
+import com.github.juanfernandez.article.shared.ai.port.AiPort;
+import com.github.juanfernandez.article.shared.config.ArticleGeneratorProperties;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
@@ -20,43 +20,25 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Client for AI provider APIs — OpenAI, Google Gemini, Ollama and Anthropic — all routed through
+ * Infrastructure adapter that implements {@link AiPort} by delegating to the configured
+ * AI provider — OpenAI, Google Gemini, Ollama or Anthropic — all routed through
  * LangChain4j when a {@link ChatModel} bean is available.
  *
- * <p>This service is responsible for:
+ * <p>This class lives in the shared infrastructure layer and is consumed by both the
+ * article and pregunta bounded contexts through the {@link AiPort} port interface.
+ *
+ * <h2>Provider routing</h2>
  * <ul>
- *   <li>Detecting the active AI provider based on {@link ArticleGeneratorProperties#getProvider()}.</li>
- *   <li>Delegating all calls to a LangChain4j {@link ChatModel} when one is present,
- *       regardless of whether the provider is OpenAI, Gemini, Ollama or Anthropic.</li>
- *   <li>Falling back to direct REST calls when no LangChain4j bean is configured.</li>
- *   <li>Extracting the text content from the AI response.</li>
- *   <li>Extracting JSON blocks from free-form AI responses.</li>
+ *   <li>When a LangChain4j {@link ChatModel} bean is present, all providers are routed
+ *       through {@link #callLangChain4j(String, String)} regardless of the configured provider.</li>
+ *   <li>Without a {@link ChatModel} bean the service falls back to direct REST calls for
+ *       OpenAI, Gemini and Ollama.  Anthropic requires LangChain4j and throws a descriptive
+ *       error when no bean is found.</li>
  * </ul>
- *
- * <p><strong>OpenAI (LangChain4j)</strong> — configure
- * {@code langchain4j.open-ai.chat-model.*} in {@code application.yml} to get a
- * LangChain4j-managed {@code OpenAiChatModel} bean.
- *
- * <p><strong>Google Gemini (LangChain4j)</strong> — configure
- * {@code langchain4j.google-ai-gemini.chat-model.*} to get a
- * {@code GoogleAiGeminiChatModel} bean.
- *
- * <p><strong>Ollama (LangChain4j)</strong> — configure
- * {@code langchain4j.ollama.chat-model.*} to get an {@code OllamaChatModel} bean.
- *
- * <p><strong>Anthropic (LangChain4j)</strong> — configure
- * {@code langchain4j.anthropic.chat-model.*} to get an {@code AnthropicChatModel} bean.
- * Requires {@code langchain4j-anthropic-spring-boot-starter} on the classpath.
- * No direct REST fallback is available for Anthropic.
- *
- * <p>All provider-specific {@code ChatModel} implementations share the same
- * {@link ChatModel} interface, so this service can call them uniformly through
- * {@link #callLangChain4j(String, String)}.  Direct REST fallbacks are retained for
- * backwards compatibility when no LangChain4j bean is on the classpath.
  */
-public class AiClientService {
+public class AiClientAdapter implements AiPort {
 
-    private static final Logger log = LoggerFactory.getLogger(AiClientService.class);
+    private static final Logger log = LoggerFactory.getLogger(AiClientAdapter.class);
 
     private static final String OPENAI_BASE_URL = "https://api.openai.com";
     private static final String GEMINI_BASE_URL  = "https://generativelanguage.googleapis.com";
@@ -64,17 +46,17 @@ public class AiClientService {
     private final ArticleGeneratorProperties properties;
     private final ObjectMapper objectMapper;
 
-    /** Optional LangChain4j chat model — present when langchain4j.open-ai.chat-model is configured. */
+    /** Optional LangChain4j chat model — present when a langchain4j starter is configured. */
     private final ChatModel chatModel;
 
     /**
      * Constructor used when a LangChain4j {@link ChatModel} is available.
      *
-     * @param properties article-generator configuration properties
+     * @param properties   article-generator configuration properties
      * @param objectMapper Jackson mapper for JSON (de)serialisation
-     * @param chatModel  LangChain4j chat model (may be {@code null} for Gemini/Ollama-only setups)
+     * @param chatModel    LangChain4j chat model (may be {@code null} for Gemini/Ollama-only setups)
      */
-    public AiClientService(ArticleGeneratorProperties properties,
+    public AiClientAdapter(ArticleGeneratorProperties properties,
                            ObjectMapper objectMapper,
                            ChatModel chatModel) {
         this.properties = properties;
@@ -89,71 +71,24 @@ public class AiClientService {
      * @param properties   article-generator configuration properties
      * @param objectMapper Jackson mapper for JSON (de)serialisation
      */
-    public AiClientService(ArticleGeneratorProperties properties, ObjectMapper objectMapper) {
+    public AiClientAdapter(ArticleGeneratorProperties properties, ObjectMapper objectMapper) {
         this(properties, objectMapper, null);
     }
 
-    // ── Provider detection ────────────────────────────────────────────────
+    // ── AiPort implementation ─────────────────────────────────────────────
 
     /**
-     * Returns {@code true} when the active provider is Google Gemini.
-     */
-    public boolean isGeminiProvider() {
-        AiProvider p = properties.getProvider();
-        if (p == AiProvider.GEMINI) return true;
-        if (p == AiProvider.OPENAI || p == AiProvider.OLLAMA || p == AiProvider.ANTHROPIC) return false;
-        return properties.getModel() != null && properties.getModel().toLowerCase().startsWith("gemini");
-    }
-
-    /**
-     * Returns {@code true} when the active provider is Ollama.
-     */
-    public boolean isOllamaProvider() {
-        AiProvider p = properties.getProvider();
-        if (p == AiProvider.OLLAMA) return true;
-        if (p == AiProvider.OPENAI || p == AiProvider.GEMINI || p == AiProvider.ANTHROPIC) return false;
-        String baseUrl = properties.getOllamaBaseUrl();
-        return baseUrl != null && !baseUrl.isBlank();
-    }
-
-    /**
-     * Returns {@code true} when the active provider is Anthropic.
-     */
-    public boolean isAnthropicProvider() {
-        return properties.getProvider() == AiProvider.ANTHROPIC;
-    }
-
-    // ── Main generation method ────────────────────────────────────────────
-
-    /**
-     * Sends {@code userPrompt} to the configured AI provider and returns the raw text response.
+     * {@inheritDoc}
      *
      * <p>When a LangChain4j {@link ChatModel} bean is available it is used for <em>all</em>
-     * providers (OpenAI, Google Gemini, Ollama, Anthropic).  This means you can configure any of:
-     * <ul>
-     *   <li>{@code langchain4j.open-ai.chat-model.*} — OpenAI via LangChain4j</li>
-     *   <li>{@code langchain4j.google-ai-gemini.chat-model.*} — Gemini via LangChain4j</li>
-     *   <li>{@code langchain4j.ollama.chat-model.*} — Ollama via LangChain4j</li>
-     *   <li>{@code langchain4j.anthropic.chat-model.*} — Anthropic Claude via LangChain4j</li>
-     * </ul>
-     * and the same {@link #callLangChain4j(String, String)} path will be used.
-     *
-     * <p>When no {@link ChatModel} bean is configured the service falls back to direct REST
-     * calls for each provider (legacy behaviour).
-     *
-     * @param systemMsg   system / instruction message for the AI
-     * @param userPrompt  user prompt text
-     * @param maxTokens   maximum output tokens (used only on the direct-REST fallback path)
-     * @param temperature generation temperature 0.0–1.0 (used only on the direct-REST fallback path)
-     * @return raw text returned by the AI
-     * @throws RuntimeException if the API call fails or returns no content
+     * providers (OpenAI, Google Gemini, Ollama, Anthropic).  Otherwise falls back to direct
+     * REST calls.
      */
+    @Override
     public String generate(String systemMsg, String userPrompt, int maxTokens, double temperature) {
-        // LangChain4j is available — use it regardless of provider (OpenAI, Gemini or Ollama)
         if (chatModel != null) {
             return callLangChain4j(systemMsg, userPrompt);
         }
-        // ── Fallback: direct REST calls ──────────────────────────────────
         if (isAnthropicProvider()) {
             throw new RuntimeException(
                     "Anthropic provider requires LangChain4j. "
@@ -165,7 +100,7 @@ public class AiClientService {
         } else if (isOllamaProvider()) {
             return callOpenAiCompatible(
                     resolveOllamaBaseUrl(),
-                    "ollama",          // placeholder key
+                    "ollama",
                     systemMsg, userPrompt, maxTokens, temperature);
         } else {
             return callOpenAiCompatible(
@@ -175,22 +110,79 @@ public class AiClientService {
         }
     }
 
-    // ── LangChain4j ───────────────────────────────────────────────────────
+    // ── Provider detection ────────────────────────────────────────────────
+
+    /** Returns {@code true} when the active provider is Google Gemini. */
+    public boolean isGeminiProvider() {
+        AiProvider p = properties.getProvider();
+        if (p == AiProvider.GEMINI) return true;
+        if (p == AiProvider.OPENAI || p == AiProvider.OLLAMA || p == AiProvider.ANTHROPIC) return false;
+        return properties.getModel() != null && properties.getModel().toLowerCase().startsWith("gemini");
+    }
+
+    /** Returns {@code true} when the active provider is Ollama. */
+    public boolean isOllamaProvider() {
+        AiProvider p = properties.getProvider();
+        if (p == AiProvider.OLLAMA) return true;
+        if (p == AiProvider.OPENAI || p == AiProvider.GEMINI || p == AiProvider.ANTHROPIC) return false;
+        String baseUrl = properties.getOllamaBaseUrl();
+        return baseUrl != null && !baseUrl.isBlank();
+    }
+
+    /** Returns {@code true} when the active provider is Anthropic. */
+    public boolean isAnthropicProvider() {
+        return properties.getProvider() == AiProvider.ANTHROPIC;
+    }
+
+    // ── JSON extraction ───────────────────────────────────────────────────
 
     /**
-     * Calls the configured AI model through the LangChain4j {@link ChatModel} abstraction.
+     * Extracts the first JSON object ({@code {...}}) from an AI response string.
      *
-     * <p>Works transparently with any LangChain4j-supported provider:
-     * {@code OpenAiChatModel}, {@code GoogleAiGeminiChatModel}, {@code OllamaChatModel}
-     * or {@code AnthropicChatModel}.
-     * Model, API key, temperature, timeout and logging are managed by the corresponding
-     * LangChain4j Spring Boot auto-configuration in {@code application.yml}.
+     * <p>Supports fenced code blocks ({@code ```json { ... }```}) and bare JSON.
      *
-     * @param systemMsg  system / instruction message
-     * @param userPrompt user prompt text
-     * @return text response from the model
-     * @throws RuntimeException if the LangChain4j call fails or returns an empty response
+     * @param text raw AI response
+     * @return extracted JSON string, or the original {@code text} when no object is found
      */
+    public String extractJsonBlock(String text) {
+        if (text == null || text.isBlank()) return "";
+
+        Pattern fence = Pattern.compile("```(?:json)?\\s*(\\{.*?\\})\\s*```",
+                Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+        Matcher fm = fence.matcher(text);
+        if (fm.find()) return fm.group(1).strip();
+
+        Pattern brace = Pattern.compile("\\{.*\\}", Pattern.DOTALL);
+        Matcher bm = brace.matcher(text);
+        return bm.find() ? bm.group(0).strip() : text.strip();
+    }
+
+    /**
+     * Parses a JSON string with tolerance for typographic quotes.
+     *
+     * @param json JSON string to parse
+     * @return parsed {@link JsonNode}
+     * @throws RuntimeException if the JSON is invalid even after quote normalisation
+     */
+    public JsonNode safeJsonParse(String json) {
+        try {
+            return objectMapper.readTree(json);
+        } catch (Exception first) {
+            String normalised = json
+                    .replace("\u201c", "\"")
+                    .replace("\u201d", "\"")
+                    .replace("\u2019", "'");
+            try {
+                return objectMapper.readTree(normalised);
+            } catch (Exception second) {
+                throw new RuntimeException("Invalid JSON from AI: " + first.getMessage()
+                        + " | preview: " + json.substring(0, Math.min(300, json.length())), second);
+            }
+        }
+    }
+
+    // ── LangChain4j ───────────────────────────────────────────────────────
+
     private String callLangChain4j(String systemMsg, String userPrompt) {
         log.debug("Calling AI provider via LangChain4j ChatModel");
         try {
@@ -206,61 +198,6 @@ public class AiClientService {
             throw e;
         } catch (Exception e) {
             throw new RuntimeException("LangChain4j call failed: " + e.getMessage(), e);
-        }
-    }
-
-    // ── JSON extraction ───────────────────────────────────────────────────
-
-    /**
-     * Extracts the first JSON object ({@code {...}}) from an AI response string.
-     *
-     * <p>Supports two common response formats:
-     * <ol>
-     *   <li>Fenced code block: <code>```json { ... }```</code></li>
-     *   <li>Bare JSON embedded anywhere in the text.</li>
-     * </ol>
-     *
-     * @param text raw AI response
-     * @return extracted JSON string, or the original {@code text} when no object is found
-     */
-    public String extractJsonBlock(String text) {
-        if (text == null || text.isBlank()) return "";
-
-        // 1. Try fenced ```json { ... }```
-        Pattern fence = Pattern.compile("```(?:json)?\\s*(\\{.*?\\})\\s*```",
-                Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-        Matcher fm = fence.matcher(text);
-        if (fm.find()) return fm.group(1).strip();
-
-        // 2. Try bare { ... }
-        Pattern brace = Pattern.compile("\\{.*\\}", Pattern.DOTALL);
-        Matcher bm = brace.matcher(text);
-        return bm.find() ? bm.group(0).strip() : text.strip();
-    }
-
-    /**
-     * Parses a JSON string with tolerance for typographic quotes ({@code \u201c}, {@code \u201d},
-     * {@code \u2019}).
-     *
-     * @param json JSON string to parse
-     * @return parsed {@link JsonNode}
-     * @throws RuntimeException if the JSON is invalid even after quote normalisation
-     */
-    public JsonNode safeJsonParse(String json) {
-        try {
-            return objectMapper.readTree(json);
-        } catch (Exception first) {
-            // Normalise typographic quotes and retry
-            String normalised = json
-                    .replace("\u201c", "\"")
-                    .replace("\u201d", "\"")
-                    .replace("\u2019", "'");
-            try {
-                return objectMapper.readTree(normalised);
-            } catch (Exception second) {
-                throw new RuntimeException("Invalid JSON from AI: " + first.getMessage()
-                        + " | preview: " + json.substring(0, Math.min(300, json.length())), second);
-            }
         }
     }
 
@@ -385,7 +322,6 @@ public class AiClientService {
         if (url == null || url.isBlank()) {
             url = "http://localhost:11434";
         }
-        // If the URL already ends with /v1 we strip it here so /v1/chat/completions is appended once
         return url.replaceAll("/v1/?$", "");
     }
 }

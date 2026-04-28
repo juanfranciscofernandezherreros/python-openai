@@ -1,6 +1,6 @@
-package com.github.juanfernandez.article.service;
+package com.github.juanfernandez.article.article.application;
 
-import com.github.juanfernandez.article.config.ArticleGeneratorProperties;
+import com.github.juanfernandez.article.shared.config.ArticleGeneratorProperties;
 
 import java.util.ArrayList;
 import java.util.HashMap;

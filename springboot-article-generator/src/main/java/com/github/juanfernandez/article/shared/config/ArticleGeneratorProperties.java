@@ -1,6 +1,6 @@
-package com.github.juanfernandez.article.config;
+package com.github.juanfernandez.article.shared.config;
 
-import com.github.juanfernandez.article.model.AiProvider;
+import com.github.juanfernandez.article.shared.ai.AiProvider;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
