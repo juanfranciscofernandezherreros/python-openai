@@ -30,7 +30,7 @@ Integración nativa con **LangChain4j** para **OpenAI**, **Google Gemini**, **Ol
 
 ## ¿Qué incluye?
 
-- `springboot-article-generator/` — librería `article-generator-spring-boot-starter` con autoconfiguración Spring Boot.
+- `ai-generic-generation-content/` — librería `article-generator-spring-boot-starter` con autoconfiguración Spring Boot.
 - **Generación de artículos** listos para inyectar: `ArticleGeneratorService`.
 - **Generación de preguntas** multilingüe persistidas en PostgreSQL: `PreguntaGeneratorService`.
 - Integración **LangChain4j 1.0.0-beta5** como método preferido para los cuatro proveedores:
@@ -99,7 +99,7 @@ La autoconfiguración registra todos los beans con `@ConditionalOnMissingBean`, 
 ## Build y tests
 
 ```bash
-cd springboot-article-generator
+cd ai-generic-generation-content
 mvn test
 ```
 
@@ -112,7 +112,7 @@ mvn test
 Desde la raíz de este repositorio:
 
 ```bash
-cd springboot-article-generator
+cd ai-generic-generation-content
 mvn clean install
 ```
 
