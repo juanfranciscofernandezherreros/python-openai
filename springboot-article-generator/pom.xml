@@ -10,12 +10,14 @@
     <version>1.0.1</version>
     <packaging>jar</packaging>
 
-    <name>Article Generator Spring Boot Starter</name>
+    <name>Article &amp; Question Generator Spring Boot Starter</name>
     <description>
-        Spring Boot library for AI-powered technical article generation with full SEO metadata.
-        Supports OpenAI (GPT), Google Gemini and Ollama (local) as AI providers.
-        Import as a Maven dependency to get auto-configured ArticleGeneratorService in any
-        Spring Boot application.
+        Spring Boot library for AI-powered content generation with two main capabilities:
+        (1) Technical article generation with full SEO metadata (ArticleGeneratorService), and
+        (2) Multilingual questionnaire question generation persisted in PostgreSQL
+        (PreguntaGeneratorService).
+        Supports OpenAI (GPT), Google Gemini, Ollama (local) and Anthropic Claude as AI providers.
+        Import as a Maven dependency to get auto-configured services in any Spring Boot application.
     </description>
     <url>https://github.com/juanfranciscofernandezherreros/python-article</url>
 
@@ -157,7 +159,7 @@
             article-generator.site=https://myblog.com
             article-generator.language=es
 
-        Inject the service in your beans:
+        Inject the services in your beans:
 
             @Autowired
             private ArticleGeneratorService articleGeneratorService;
@@ -169,5 +171,11 @@
                     .tag("JWT Authentication")
                     .build()
             );
+
+            // Question generation (requires spring-boot-starter-data-jpa + PostgreSQL DataSource)
+            @Autowired
+            private PreguntaGeneratorService preguntaGeneratorService;
+
+            Pregunta nueva = preguntaGeneratorService.generateAndSave();
     -->
 </project>

@@ -1,6 +1,6 @@
-# Spring Boot Article Generator
+# Spring Boot Article & Question Generator
 
-Starter de Spring Boot para generar artículos técnicos con IA y metadatos SEO completos.  
+Starter de Spring Boot para generar **artículos técnicos con SEO completo** y **preguntas multilingüe** con IA.  
 Integración nativa con **LangChain4j** para **OpenAI**, **Google Gemini**, **Ollama** (local) y **Anthropic Claude**.
 
 ---
@@ -15,12 +15,15 @@ Integración nativa con **LangChain4j** para **OpenAI**, **Google Gemini**, **Ol
   - [1. Instalar el starter](#1-instalar-el-starter-localmente)
   - [2. Agregar dependencia](#2-agregar-dependencia-en-tu-proyecto-spring-boot)
   - [3. Configurar proveedores](#3-configurar-propiedades)
-  - [4. Inyectar y usar el servicio](#4-inyectar-y-usar-articlegeneratorservice)
+  - [4. Inyectar y usar el servicio de artículos](#4-inyectar-y-usar-articlegeneratorservice)
+  - [5. Inyectar y usar el servicio de preguntas](#5-inyectar-y-usar-preguntaGeneratorservice)
 - [Referencia de propiedades](#referencia-de-propiedades)
 - [Algoritmo de deduplicación de títulos](#algoritmo-de-deduplicación-de-títulos)
-- [Ejemplo end-to-end](#ejemplo-de-uso-end-to-end)
+- [Ejemplo end-to-end — Artículos](#ejemplo-de-uso-end-to-end-artículos)
+- [Ejemplo end-to-end — Preguntas](#ejemplo-de-uso-end-to-end-preguntas)
 - [Modelo de entrada](#modelo-de-entrada-articlerequest)
-- [Modelo de respuesta](#modelo-de-respuesta-article)
+- [Modelo de respuesta `Article`](#modelo-de-respuesta-article)
+- [Modelo de entidad `Pregunta`](#modelo-de-entidad-pregunta)
 - [Notas rápidas](#notas-rápidas)
 
 ---
@@ -28,7 +31,8 @@ Integración nativa con **LangChain4j** para **OpenAI**, **Google Gemini**, **Ol
 ## ¿Qué incluye?
 
 - `springboot-article-generator/` — librería `article-generator-spring-boot-starter` con autoconfiguración Spring Boot.
-- Servicio principal listo para inyectar: `ArticleGeneratorService`.
+- **Generación de artículos** listos para inyectar: `ArticleGeneratorService`.
+- **Generación de preguntas** multilingüe persistidas en PostgreSQL: `PreguntaGeneratorService`.
 - Integración **LangChain4j 1.0.0-beta5** como método preferido para los cuatro proveedores:
   - `langchain4j-open-ai-spring-boot-starter` — OpenAI (GPT)
   - `langchain4j-google-ai-gemini-spring-boot-starter` — Google Gemini
@@ -40,6 +44,7 @@ Integración nativa con **LangChain4j** para **OpenAI**, **Google Gemini**, **Ol
   - **Ollama** (local) — vía LangChain4j `ChatModel` (recomendado) o REST directo
   - **Anthropic Claude** — vía LangChain4j `ChatModel` (requiere `langchain4j-anthropic-spring-boot-starter`)
 - Generación de artículos con HTML semántico, metadatos SEO completos, Schema.org JSON-LD y Open Graph.
+- Generación de preguntas de cuestionario en cuatro idiomas (ca/en/es/fr) con deduplicación automática y persistencia en PostgreSQL.
 - Algoritmo de deduplicación de títulos en dos fases.
 - Reintentos automáticos con _exponential back-off_ para errores transitorios de red.
 
@@ -48,7 +53,7 @@ Integración nativa con **LangChain4j** para **OpenAI**, **Google Gemini**, **Ol
 ## Arquitectura
 
 ```
-ArticleGeneratorService          ← orquesta el pipeline completo
+ArticleGeneratorService          ← orquesta la generación de artículos
   ├─ PromptBuilderService        ← construye los prompts para la IA en el idioma indicado
   ├─ AiClientService             ← cliente HTTP para los proveedores IA
   │    ├─ LangChain4j ChatModel  ← OpenAI, Google Gemini, Ollama o Anthropic (recomendado, opcional)
@@ -57,21 +62,29 @@ ArticleGeneratorService          ← orquesta el pipeline completo
   │    └─ Ollama REST            ← fallback sin LangChain4j (endpoint OpenAI-compatible)
   ├─ SeoService                  ← genera canonical URL y Schema.org TechArticle JSON-LD
   └─ TextUtils                   ← slugificación, similitud de títulos, recuento de palabras
+
+PreguntaGeneratorService         ← orquesta la generación y persistencia de preguntas
+  ├─ AiClientService             ← mismo cliente IA compartido con ArticleGeneratorService
+  └─ PreguntaRepository          ← acceso a la tabla PostgreSQL `preguntas` (Spring Data JPA)
 ```
 
 | Clase | Propósito |
 |-------|-----------|
-| `ArticleGeneratorService` | Pipeline principal: generación, deduplicación, enriquecimiento SEO |
+| `ArticleGeneratorService` | Pipeline principal de artículos: generación, deduplicación, enriquecimiento SEO |
+| `PreguntaGeneratorService` | Genera y persiste preguntas multilingüe únicas en PostgreSQL |
 | `AiClientService` | Llamadas a la IA (LangChain4j / REST directo) y extracción de JSON |
 | `PromptBuilderService` | Construcción de prompts multilingüe con instrucciones SEO |
 | `SeoService` | URLs canónicas y datos estructurados Schema.org |
 | `TextUtils` | Slugs, similitud de títulos (LCS ratio), conteo de palabras, tiempo de lectura |
 | `ArticleGeneratorProperties` | Propiedades `@ConfigurationProperties(prefix = "article-generator")` |
-| `Article` | DTO de salida con contenido + metadatos SEO + Open Graph + estadísticas |
-| `ArticleRequest` | DTO de entrada para la generación |
+| `Article` | DTO de salida de artículo con contenido + metadatos SEO + Open Graph + estadísticas |
+| `ArticleRequest` | DTO de entrada para la generación de artículos |
+| `Pregunta` | Entidad JPA mapeada a la tabla `preguntas` con texto multilingüe JSONB |
+| `PreguntaRepository` | Repositorio Spring Data JPA para `Pregunta` |
 | `AiProvider` | Enum: `AUTO`, `OPENAI`, `GEMINI`, `OLLAMA`, `ANTHROPIC` |
 
 La autoconfiguración registra todos los beans con `@ConditionalOnMissingBean`, por lo que cualquier bean puede ser sobreescrito por el proyecto consumidor.
+`PreguntaGeneratorService` y `PreguntaRepository` solo se activan cuando `spring-boot-starter-data-jpa` está en el classpath y hay un `DataSource` configurado.
 
 ---
 
@@ -338,6 +351,83 @@ public class ArticleController {
 
 ---
 
+### 5) Inyectar y usar `PreguntaGeneratorService`
+
+> **Requisitos adicionales:** este bean solo se activa cuando `spring-boot-starter-data-jpa` está en el classpath del proyecto consumidor **y** hay una `DataSource` PostgreSQL configurada.
+
+Añade las dependencias en el `pom.xml` de tu proyecto:
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-jpa</artifactId>
+</dependency>
+<dependency>
+    <groupId>org.postgresql</groupId>
+    <artifactId>postgresql</artifactId>
+    <scope>runtime</scope>
+</dependency>
+```
+
+Configura la fuente de datos en `application.yml`:
+
+```yaml
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/mi_base_de_datos
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+```
+
+Crea la tabla `preguntas` en PostgreSQL (si no existe):
+
+```sql
+CREATE TABLE preguntas (
+    id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    campo          VARCHAR(255) NOT NULL,
+    orden          INTEGER      NOT NULL,
+    texto          JSONB        NOT NULL,
+    actualizada_en TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+```
+
+Inyecta y usa el servicio en tu aplicación:
+
+```java
+package com.example.demo.web;
+
+import com.github.juanfernandez.article.model.Pregunta;
+import com.github.juanfernandez.article.service.PreguntaGeneratorService;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/api/preguntas")
+public class PreguntaController {
+
+    private final PreguntaGeneratorService preguntaGeneratorService;
+
+    public PreguntaController(PreguntaGeneratorService preguntaGeneratorService) {
+        this.preguntaGeneratorService = preguntaGeneratorService;
+    }
+
+    /**
+     * Generates a new unique multilingual question and persists it in the `preguntas` table.
+     * Returns the saved entity including the database-assigned UUID and orden.
+     */
+    @PostMapping("/generate")
+    public Pregunta generate() {
+        return preguntaGeneratorService.generateAndSave();
+    }
+}
+```
+
+---
+
 ## Referencia de propiedades
 
 Todas las propiedades tienen el prefijo `article-generator`.
@@ -418,7 +508,7 @@ El starter aplica un proceso en **dos fases** para garantizar títulos únicos:
 
 ---
 
-## Ejemplo de uso end-to-end
+## Ejemplo de uso end-to-end — Artículos
 
 ### Request
 
@@ -478,6 +568,33 @@ curl -X POST 'http://localhost:8080/api/articles/generate' \
 
 ---
 
+## Ejemplo de uso end-to-end — Preguntas
+
+### Request
+
+```bash
+curl -X POST 'http://localhost:8080/api/preguntas/generate'
+```
+
+### Respuesta
+
+```json
+{
+  "id": "63838a84-01e6-4fab-ac9b-3906a92fc29d",
+  "campo": "viviendaAlquiler",
+  "orden": 7,
+  "texto": {
+    "ca": "Vius de lloguer?",
+    "en": "Do you live in a rented home?",
+    "es": "¿Vives de alquiler?",
+    "fr": "Vivez-vous en location?"
+  },
+  "actualizadaEn": "2026-04-27T22:42:43.572793+00:00"
+}
+```
+
+---
+
 ## Modelo de entrada `ArticleRequest`
 
 | Campo | Tipo | Obligatorio | Descripción |
@@ -523,6 +640,20 @@ curl -X POST 'http://localhost:8080/api/articles/generate' \
 
 ---
 
+## Modelo de entidad `Pregunta`
+
+Entidad JPA mapeada a la tabla PostgreSQL `preguntas`.
+
+| Campo | Tipo Java | Columna PostgreSQL | Descripción |
+|-------|-----------|--------------------|-------------|
+| `id` | `UUID` | `UUID PRIMARY KEY DEFAULT gen_random_uuid()` | Identificador único generado por la base de datos |
+| `campo` | `String` | `VARCHAR(255) NOT NULL` | Identificador camelCase del campo (p.e. `viviendaAlquiler`) |
+| `orden` | `Integer` | `INTEGER NOT NULL` | Posición de visualización en el cuestionario (1-based) |
+| `texto` | `Map<String, String>` | `JSONB NOT NULL` | Texto de la pregunta en cuatro idiomas: `ca`, `en`, `es`, `fr` |
+| `actualizadaEn` | `OffsetDateTime` | `TIMESTAMPTZ NOT NULL DEFAULT now()` | Timestamp de la última actualización |
+
+---
+
 ## Notas rápidas
 
 - Campo obligatorio en `ArticleRequest`: `category`.
@@ -530,4 +661,6 @@ curl -X POST 'http://localhost:8080/api/articles/generate' \
 - Si no envías `language`, `site` o `authorUsername`, se aplican los valores de `application.yml`.
 - Si envías `title`, la IA genera el cuerpo del artículo alrededor de ese título exacto (se omite la deduplicación de fases).
 - El starter aplica deduplicación de títulos usando `avoidTitles` (solo cuando no se especifica `title`).
+- `PreguntaGeneratorService` solo se registra cuando `spring-boot-starter-data-jpa` y una `DataSource` PostgreSQL están configurados.
+- `PreguntaGeneratorService.generateAndSave()` deduplica automáticamente: comprueba el identificador `campo` y el texto en español antes de persistir.
 - Todos los beans son `@ConditionalOnMissingBean`: el proyecto consumidor puede sobreescribir cualquiera.

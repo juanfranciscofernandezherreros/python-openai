@@ -18,7 +18,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 
 /**
- * Spring Boot auto-configuration for the Article Generator library.
+ * Spring Boot auto-configuration for the Article &amp; Question Generator library.
  *
  * <p>Registers all necessary beans when the library is on the classpath.  Every bean is guarded
  * with {@code @ConditionalOnMissingBean} so consuming applications can override any individual
@@ -26,6 +26,14 @@ import org.springframework.context.annotation.Bean;
  *
  * <p>Activated automatically via
  * {@code META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports}.
+ *
+ * <h2>Registered beans</h2>
+ * <ul>
+ *   <li>{@link ArticleGeneratorService} — AI-powered article generation with full SEO metadata.</li>
+ *   <li>{@link PreguntaGeneratorService} — AI-powered multilingual question generation persisted
+ *       in PostgreSQL. Only registered when a {@link PreguntaRepository} bean is present
+ *       (requires {@code spring-boot-starter-data-jpa} and a configured {@code DataSource}).</li>
+ * </ul>
  *
  * <h2>Minimal required configuration</h2>
  * <pre>
