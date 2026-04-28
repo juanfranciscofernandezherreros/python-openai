@@ -2,14 +2,17 @@ package com.github.juanfernandez.article;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.juanfernandez.article.config.ArticleGeneratorProperties;
+import com.github.juanfernandez.article.repository.PreguntaRepository;
 import com.github.juanfernandez.article.service.AiClientService;
 import com.github.juanfernandez.article.service.ArticleGeneratorService;
+import com.github.juanfernandez.article.service.PreguntaGeneratorService;
 import com.github.juanfernandez.article.service.PromptBuilderService;
 import com.github.juanfernandez.article.service.SeoService;
 import com.github.juanfernandez.article.service.TextUtils;
 import dev.langchain4j.model.chat.ChatModel;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -128,5 +131,21 @@ public class ArticleGeneratorAutoConfiguration {
             TextUtils textUtils) {
         return new ArticleGeneratorService(
                 properties, aiClientService, promptBuilderService, seoService, textUtils);
+    }
+
+    /**
+     * Registers {@link PreguntaGeneratorService} when a {@link PreguntaRepository} bean is present.
+     *
+     * <p>A {@code PreguntaRepository} bean is automatically created by Spring Data JPA when
+     * {@code spring-boot-starter-data-jpa} is on the classpath and a {@code DataSource} is
+     * configured. This bean is therefore only active in applications that have both the JPA
+     * starter and a configured PostgreSQL data source.
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnBean(PreguntaRepository.class)
+    public PreguntaGeneratorService preguntaGeneratorService(AiClientService aiClientService,
+                                                              PreguntaRepository preguntaRepository) {
+        return new PreguntaGeneratorService(aiClientService, preguntaRepository);
     }
 }
