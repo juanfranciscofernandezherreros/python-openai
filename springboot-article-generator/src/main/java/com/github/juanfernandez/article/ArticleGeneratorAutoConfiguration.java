@@ -2,27 +2,30 @@ package com.github.juanfernandez.article;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.juanfernandez.article.config.ArticleGeneratorProperties;
-import com.github.juanfernandez.article.repository.PreguntaRepository;
 import com.github.juanfernandez.article.service.AiClientService;
 import com.github.juanfernandez.article.service.ArticleGeneratorService;
-import com.github.juanfernandez.article.service.PreguntaGeneratorService;
 import com.github.juanfernandez.article.service.PromptBuilderService;
 import com.github.juanfernandez.article.service.SeoService;
 import com.github.juanfernandez.article.service.TextUtils;
 import dev.langchain4j.model.chat.ChatModel;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
 /**
- * Spring Boot auto-configuration for the Article &amp; Question Generator library.
+ * Spring Boot auto-configuration for the Article Generator library.
  *
- * <p>Registers all necessary beans when the library is on the classpath.  Every bean is guarded
- * with {@code @ConditionalOnMissingBean} so consuming applications can override any individual
+ * <p>This is the <strong>primary</strong> auto-configuration. It registers all beans required
+ * to generate SEO articles via {@link ArticleGeneratorService}. Every bean is guarded with
+ * {@code @ConditionalOnMissingBean} so consuming applications can override any individual
  * component by declaring their own bean of the same type.
+ *
+ * <p>Question generation ({@code PreguntaGeneratorService}) is handled separately by
+ * {@link PreguntaGeneratorAutoConfiguration}, which is only activated when a
+ * {@code PreguntaRepository} bean is present. This clean separation ensures that the optional
+ * question-generation feature cannot interfere with article generation in any way.
  *
  * <p>Activated automatically via
  * {@code META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports}.
@@ -30,9 +33,6 @@ import org.springframework.context.annotation.Bean;
  * <h2>Registered beans</h2>
  * <ul>
  *   <li>{@link ArticleGeneratorService} — AI-powered article generation with full SEO metadata.</li>
- *   <li>{@link PreguntaGeneratorService} — AI-powered multilingual question generation persisted
- *       in PostgreSQL. Only registered when a {@link PreguntaRepository} bean is present
- *       (requires {@code spring-boot-starter-data-jpa} and a configured {@code DataSource}).</li>
  * </ul>
  *
  * <h2>Minimal required configuration</h2>
@@ -139,21 +139,5 @@ public class ArticleGeneratorAutoConfiguration {
             TextUtils textUtils) {
         return new ArticleGeneratorService(
                 properties, aiClientService, promptBuilderService, seoService, textUtils);
-    }
-
-    /**
-     * Registers {@link PreguntaGeneratorService} when a {@link PreguntaRepository} bean is present.
-     *
-     * <p>A {@code PreguntaRepository} bean is automatically created by Spring Data JPA when
-     * {@code spring-boot-starter-data-jpa} is on the classpath and a {@code DataSource} is
-     * configured. This bean is therefore only active in applications that have both the JPA
-     * starter and a configured PostgreSQL data source.
-     */
-    @Bean
-    @ConditionalOnMissingBean
-    @ConditionalOnBean(PreguntaRepository.class)
-    public PreguntaGeneratorService preguntaGeneratorService(AiClientService aiClientService,
-                                                              PreguntaRepository preguntaRepository) {
-        return new PreguntaGeneratorService(aiClientService, preguntaRepository);
     }
 }

@@ -15,6 +15,9 @@ public class PromptBuilderService {
 
     private static final String DEFAULT_GENERATION_SYSTEM_MSG =
             "Eres redactor técnico sénior y experto en SEO especializado en tecnología y desarrollo de software. "
+            + "Tu misión es generar ARTÍCULOS TÉCNICOS COMPLETOS, no cuestionarios ni listas de preguntas. "
+            + "Cada respuesta tuya debe ser un artículo estructurado con introducción, secciones de contenido "
+            + "explicativo, ejemplos de código y una conclusión. "
             + "Generas contenido optimizado para motores de búsqueda con HTML semántico, "
             + "estructura de encabezados jerárquica (h1 > h2 > h3), uso estratégico de palabras clave "
             + "y metadatos precisos. "
@@ -98,24 +101,26 @@ public class PromptBuilderService {
         String avoidBlock = buildAvoidBlock(avoidTitles,
                 "\nEvita títulos iguales o muy similares a: ", "\"; \"", "\"", "\"");
 
-        return "Artículo SEO en " + lang + " " + topic
+        return "Escribe un artículo técnico SEO completo en " + lang + " " + topic
                 + "(categoría: \"" + parentName + "\", subcategoría: \"" + subcatName + "\").\n"
+                + "IMPORTANTE: debes generar un ARTÍCULO con contenido explicativo extenso, NO un cuestionario ni una lista de preguntas.\n"
                 + "Devuelve SOLO JSON: {\"title\":\"...\",\"summary\":\"...\",\"body\":\"...\",\"keywords\":[...]}\n\n"
                 + titleInstruction + "\n"
                 + "summary: meta-descripción SEO (máx. 160 caracteres), incluye palabra clave, llamada a la acción implícita.\n"
                 + "keywords: 5-7 palabras clave SEO en minúsculas (long-tail incluidas), sin repetir el título exacto.\n"
-                + "body (HTML semántico bien cerrado, optimizado para SEO on-page):\n"
+                + "body — artículo HTML semántico completo (bien cerrado, optimizado para SEO on-page):\n"
                 + "- <h1> con título (sin emojis), palabra clave principal incluida.\n"
-                + "- Intro <p> que enganche, presente el problema y contenga la keyword principal.\n"
-                + "- 3-5 secciones <h2> con keywords secundarias: explicación técnica, buenas prácticas, casos reales.\n"
-                + "- Subsecciones <h3> donde sea necesario para profundizar.\n"
-                + "- Código en <pre><code class=\"language-...\">. Funcional, copiable, con comentarios descriptivos.\n"
+                + "- Introducción <p> que enganche, presente el problema y contenga la keyword principal.\n"
+                + "- 3-5 secciones <h2> con contenido explicativo extenso: explicación técnica, buenas prácticas, casos reales.\n"
+                + "- Subsecciones <h3> con desarrollo detallado donde sea necesario para profundizar.\n"
+                + "- Código funcional en <pre><code class=\"language-...\">. Copiable, con comentarios descriptivos.\n"
                 + "- Usa <strong> y <em> para resaltar términos clave (sin abusar).\n"
-                + "- <h2> FAQ (Preguntas frecuentes): 3-5 preguntas en <h3> con respuestas en <p>. Redacta preguntas como búsquedas reales de usuarios.\n"
-                + "- <h2> Conclusión con resumen de puntos clave y CTA (llamada a la acción).\n"
                 + "- Listas <ul>/<ol> para ventajas, pasos o comparativas.\n"
-                + "- Párrafos cortos (3-4 líneas máx.) para mejorar la legibilidad.\n\n"
-                + "Tono profesional, sin relleno. JSON con comillas escapadas."
+                + "- Párrafos cortos (3-4 líneas máx.) para mejorar la legibilidad.\n"
+                + "- <h2> Conclusión con resumen de puntos clave y CTA (llamada a la acción).\n"
+                + "- (Opcional) <h2> Preguntas frecuentes: máximo 3 preguntas breves en <h3> con respuesta en <p>. "
+                + "Esta sección es secundaria; el artículo debe tener contenido sustancial antes de llegar a ella.\n\n"
+                + "Tono profesional, sin relleno. El cuerpo del artículo debe ser rico en contenido explicativo. JSON con comillas escapadas."
                 + avoidBlock + "\n";
     }
 
