@@ -9,6 +9,7 @@ import com.github.juanfernandez.article.article.port.in.ArticleGeneratorPort;
 import com.github.juanfernandez.article.shared.ai.AiClientAdapter;
 import com.github.juanfernandez.article.shared.ai.port.AiPort;
 import com.github.juanfernandez.article.shared.config.ArticleGeneratorProperties;
+import com.github.juanfernandez.article.shared.util.JsonUtils;
 import dev.langchain4j.model.chat.ChatModel;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -34,7 +35,7 @@ import org.springframework.context.annotation.Bean;
  * <h2>Hexagonal architecture</h2>
  * <ul>
  *   <li><strong>Shared kernel</strong>: {@link ArticleGeneratorProperties}, {@link AiPort} /
- *       {@link AiClientAdapter}.</li>
+ *       {@link AiClientAdapter}, {@link JsonUtils}.</li>
  *   <li><strong>Article application layer</strong>: {@link ArticleGeneratorService} implements
  *       {@link ArticleGeneratorPort}; supported by {@link PromptBuilderService},
  *       {@link SeoService} and {@link TextUtils}.</li>
@@ -48,6 +49,12 @@ public class ArticleGeneratorAutoConfiguration {
     @ConditionalOnMissingBean
     public ObjectMapper articleGeneratorObjectMapper() {
         return new ObjectMapper();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public JsonUtils jsonUtils(ObjectMapper objectMapper) {
+        return new JsonUtils(objectMapper);
     }
 
     @Bean
@@ -84,8 +91,9 @@ public class ArticleGeneratorAutoConfiguration {
             AiPort aiPort,
             PromptBuilderService promptBuilderService,
             SeoService seoService,
-            TextUtils textUtils) {
+            TextUtils textUtils,
+            JsonUtils jsonUtils) {
         return new ArticleGeneratorService(
-                properties, aiPort, promptBuilderService, seoService, textUtils);
+                properties, aiPort, promptBuilderService, seoService, textUtils, jsonUtils);
     }
 }

@@ -16,8 +16,6 @@ import org.springframework.web.client.RestClient;
 
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Infrastructure adapter that implements {@link AiPort} by delegating to the configured
@@ -136,50 +134,9 @@ public class AiClientAdapter implements AiPort {
 
     // ── JSON extraction ───────────────────────────────────────────────────
 
-    /**
-     * Extracts the first JSON object ({@code {...}}) from an AI response string.
-     *
-     * <p>Supports fenced code blocks ({@code ```json { ... }```}) and bare JSON.
-     *
-     * @param text raw AI response
-     * @return extracted JSON string, or the original {@code text} when no object is found
-     */
-    public String extractJsonBlock(String text) {
-        if (text == null || text.isBlank()) return "";
-
-        Pattern fence = Pattern.compile("```(?:json)?\\s*(\\{.*?\\})\\s*```",
-                Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-        Matcher fm = fence.matcher(text);
-        if (fm.find()) return fm.group(1).strip();
-
-        Pattern brace = Pattern.compile("\\{.*\\}", Pattern.DOTALL);
-        Matcher bm = brace.matcher(text);
-        return bm.find() ? bm.group(0).strip() : text.strip();
-    }
-
-    /**
-     * Parses a JSON string with tolerance for typographic quotes.
-     *
-     * @param json JSON string to parse
-     * @return parsed {@link JsonNode}
-     * @throws RuntimeException if the JSON is invalid even after quote normalisation
-     */
-    public JsonNode safeJsonParse(String json) {
-        try {
-            return objectMapper.readTree(json);
-        } catch (Exception first) {
-            String normalised = json
-                    .replace("\u201c", "\"")
-                    .replace("\u201d", "\"")
-                    .replace("\u2019", "'");
-            try {
-                return objectMapper.readTree(normalised);
-            } catch (Exception second) {
-                throw new RuntimeException("Invalid JSON from AI: " + first.getMessage()
-                        + " | preview: " + json.substring(0, Math.min(300, json.length())), second);
-            }
-        }
-    }
+    // JSON extraction and parsing are provided by the shared JsonUtils bean.
+    // AiClientAdapter focuses solely on transport: calling the AI provider and
+    // returning the raw text response.
 
     // ── LangChain4j ───────────────────────────────────────────────────────
 

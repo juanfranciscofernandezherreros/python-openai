@@ -4,8 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.github.juanfernandez.article.pregunta.domain.Pregunta;
 import com.github.juanfernandez.article.pregunta.port.in.PreguntaGeneratorPort;
 import com.github.juanfernandez.article.pregunta.port.out.PreguntaRepositoryPort;
-import com.github.juanfernandez.article.shared.ai.AiClientAdapter;
 import com.github.juanfernandez.article.shared.ai.port.AiPort;
+import com.github.juanfernandez.article.shared.util.JsonUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,12 +64,13 @@ public class PreguntaGeneratorService implements PreguntaGeneratorPort {
             + "}";
 
     private final AiPort aiPort;
-    private final AiClientAdapter aiClientAdapter;
+    private final JsonUtils jsonUtils;
     private final PreguntaRepositoryPort preguntaRepository;
 
-    public PreguntaGeneratorService(AiPort aiPort, PreguntaRepositoryPort preguntaRepository) {
+    public PreguntaGeneratorService(AiPort aiPort, PreguntaRepositoryPort preguntaRepository,
+                                     JsonUtils jsonUtils) {
         this.aiPort = aiPort;
-        this.aiClientAdapter = (aiPort instanceof AiClientAdapter) ? (AiClientAdapter) aiPort : null;
+        this.jsonUtils = jsonUtils;
         this.preguntaRepository = preguntaRepository;
     }
 
@@ -168,20 +169,11 @@ public class PreguntaGeneratorService implements PreguntaGeneratorPort {
     }
 
     private String extractJsonBlock(String text) {
-        if (aiClientAdapter != null) return aiClientAdapter.extractJsonBlock(text);
-        if (text == null || text.isBlank()) return "";
-        java.util.regex.Pattern brace = java.util.regex.Pattern.compile("\\{.*\\}", java.util.regex.Pattern.DOTALL);
-        java.util.regex.Matcher bm = brace.matcher(text);
-        return bm.find() ? bm.group(0).strip() : text.strip();
+        return jsonUtils.extractJsonBlock(text);
     }
 
     private JsonNode safeJsonParse(String json) {
-        if (aiClientAdapter != null) return aiClientAdapter.safeJsonParse(json);
-        try {
-            return new com.fasterxml.jackson.databind.ObjectMapper().readTree(json);
-        } catch (Exception e) {
-            throw new RuntimeException("Invalid JSON from AI: " + e.getMessage(), e);
-        }
+        return jsonUtils.safeJsonParse(json);
     }
 
     private static String textNode(JsonNode node, String field) {

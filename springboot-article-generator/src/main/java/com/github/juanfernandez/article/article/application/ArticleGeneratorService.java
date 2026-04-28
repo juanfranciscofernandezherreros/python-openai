@@ -4,9 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.github.juanfernandez.article.article.domain.Article;
 import com.github.juanfernandez.article.article.domain.ArticleRequest;
 import com.github.juanfernandez.article.article.port.in.ArticleGeneratorPort;
-import com.github.juanfernandez.article.shared.ai.AiClientAdapter;
 import com.github.juanfernandez.article.shared.ai.port.AiPort;
 import com.github.juanfernandez.article.shared.config.ArticleGeneratorProperties;
+import com.github.juanfernandez.article.shared.util.JsonUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,24 +47,24 @@ public class ArticleGeneratorService implements ArticleGeneratorPort {
 
     private final ArticleGeneratorProperties properties;
     private final AiPort aiPort;
-    private final AiClientAdapter aiClientAdapter;
     private final PromptBuilderService promptBuilder;
     private final SeoService seoService;
     private final TextUtils textUtils;
+    private final JsonUtils jsonUtils;
 
     public ArticleGeneratorService(
             ArticleGeneratorProperties properties,
             AiPort aiPort,
             PromptBuilderService promptBuilder,
             SeoService seoService,
-            TextUtils textUtils) {
+            TextUtils textUtils,
+            JsonUtils jsonUtils) {
         this.properties = properties;
         this.aiPort = aiPort;
-        // AiClientAdapter provides JSON utilities in addition to the AiPort contract
-        this.aiClientAdapter = (aiPort instanceof AiClientAdapter) ? (AiClientAdapter) aiPort : null;
         this.promptBuilder = promptBuilder;
         this.seoService = seoService;
         this.textUtils = textUtils;
+        this.jsonUtils = jsonUtils;
     }
 
     // ── ArticleGeneratorPort implementation ───────────────────────────────
@@ -287,24 +287,14 @@ public class ArticleGeneratorService implements ArticleGeneratorPort {
                 || msg.contains("UnknownHostException");
     }
 
-    // ── JSON helpers (delegated to adapter when available) ────────────────
+    // ── JSON helpers ──────────────────────────────────────────────────────
 
     private String extractJsonBlock(String text) {
-        if (aiClientAdapter != null) return aiClientAdapter.extractJsonBlock(text);
-        // Fallback inline extraction
-        if (text == null || text.isBlank()) return "";
-        java.util.regex.Pattern brace = java.util.regex.Pattern.compile("\\{.*\\}", java.util.regex.Pattern.DOTALL);
-        java.util.regex.Matcher bm = brace.matcher(text);
-        return bm.find() ? bm.group(0).strip() : text.strip();
+        return jsonUtils.extractJsonBlock(text);
     }
 
     private JsonNode safeJsonParse(String json) {
-        if (aiClientAdapter != null) return aiClientAdapter.safeJsonParse(json);
-        try {
-            return new com.fasterxml.jackson.databind.ObjectMapper().readTree(json);
-        } catch (Exception e) {
-            throw new RuntimeException("Invalid JSON from AI: " + e.getMessage(), e);
-        }
+        return jsonUtils.safeJsonParse(json);
     }
 
     // ── Utility ───────────────────────────────────────────────────────────

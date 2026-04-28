@@ -5,6 +5,7 @@ import com.github.juanfernandez.article.pregunta.infrastructure.persistence.JpaP
 import com.github.juanfernandez.article.pregunta.port.in.PreguntaGeneratorPort;
 import com.github.juanfernandez.article.pregunta.port.out.PreguntaRepositoryPort;
 import com.github.juanfernandez.article.shared.ai.port.AiPort;
+import com.github.juanfernandez.article.shared.util.JsonUtils;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -54,7 +55,8 @@ public class PreguntaGeneratorAutoConfiguration {
     @ConditionalOnMissingBean(PreguntaGeneratorPort.class)
     @ConditionalOnBean(JpaPreguntaRepository.class)
     public PreguntaGeneratorService preguntaGeneratorService(AiPort aiPort,
-                                                              JpaPreguntaRepository preguntaRepository) {
-        return new PreguntaGeneratorService(aiPort, preguntaRepository);
+                                                              JpaPreguntaRepository preguntaRepository,
+                                                              JsonUtils jsonUtils) {
+        return new PreguntaGeneratorService(aiPort, preguntaRepository, jsonUtils);
     }
 }
