@@ -5,7 +5,7 @@
                              https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.github.juanfernandez</groupId>
+    <groupId>io.github.aigen</groupId>
     <artifactId>article-generator-spring-boot-starter</artifactId>
     <version>1.0.1</version>
     <packaging>jar</packaging>
@@ -19,7 +19,7 @@
         Supports OpenAI (GPT), Google Gemini, Ollama (local) and Anthropic Claude as AI providers.
         Import as a Maven dependency to get auto-configured services in any Spring Boot application.
     </description>
-    <url>https://github.com/juanfranciscofernandezherreros/python-article</url>
+    <url>https://github.com/juanfranciscofernandezherreros/article-generator</url>
 
     <licenses>
         <license>
@@ -146,7 +146,7 @@
         Add to your Spring Boot application's pom.xml:
 
             <dependency>
-                <groupId>com.github.juanfernandez</groupId>
+                <groupId>io.github.aigen</groupId>
                 <artifactId>article-generator-spring-boot-starter</artifactId>
                 <version>1.0.1</version>
             </dependency>
