@@ -1,6 +1,6 @@
 package io.github.aigen.article.application;
 
-import io.github.aigen.shared.config.ArticleGeneratorProperties;
+import io.github.aigen.article.config.ArticleGeneratorProperties;
 
 import java.util.ArrayList;
 import java.util.HashMap;

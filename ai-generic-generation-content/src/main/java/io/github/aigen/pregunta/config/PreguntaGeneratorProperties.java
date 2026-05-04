@@ -1,5 +1,6 @@
 package io.github.aigen.pregunta.config;
 
+import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.Arrays;
@@ -22,6 +23,7 @@ import java.util.List;
  * </pre>
  */
 @ConfigurationProperties(prefix = "pregunta-generator")
+@AutoConfiguration
 public class PreguntaGeneratorProperties {
 
     /**

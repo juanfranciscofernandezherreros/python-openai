@@ -1,7 +1,7 @@
 package io.github.aigen.shared.ai.infrastructure;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.aigen.shared.config.ArticleGeneratorProperties;
+import io.github.aigen.article.config.ArticleGeneratorProperties;
 import io.github.aigen.shared.ai.AiProvider;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;

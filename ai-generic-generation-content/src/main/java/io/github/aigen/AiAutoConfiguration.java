@@ -1,10 +1,9 @@
 package io.github.aigen;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.aigen.shared.config.ArticleGeneratorProperties;
+import io.github.aigen.article.config.ArticleGeneratorProperties;
 import io.github.aigen.shared.ai.port.AiPort;
 import io.github.aigen.shared.ai.infrastructure.*;
-import io.github.aigen.shared.ai.RetryConfig;
 import dev.langchain4j.model.chat.ChatModel;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -17,7 +16,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 @AutoConfiguration
-@EnableConfigurationProperties(ArticleGeneratorProperties.class)
 public class AiAutoConfiguration {
 
     // ---------------- JSON ----------------

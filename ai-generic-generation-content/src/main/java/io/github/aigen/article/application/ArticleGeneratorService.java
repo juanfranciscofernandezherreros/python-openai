@@ -6,7 +6,7 @@ import io.github.aigen.article.domain.ArticleRequest;
 import io.github.aigen.article.port.in.ArticleGeneratorPort;
 import io.github.aigen.article.port.out.ArticleRepositoryPort;
 import io.github.aigen.shared.ai.port.AiPort;
-import io.github.aigen.shared.config.ArticleGeneratorProperties;
+import io.github.aigen.article.config.ArticleGeneratorProperties;
 import io.github.aigen.shared.util.JsonUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

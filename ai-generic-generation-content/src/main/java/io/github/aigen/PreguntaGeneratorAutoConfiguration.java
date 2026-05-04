@@ -42,7 +42,7 @@ import org.springframework.context.annotation.Bean;
  * and define a {@code JpaPreguntaRepository} bean (or let Spring Data JPA create it
  * automatically when the {@code Pregunta} entity is scanned).
  */
-@AutoConfiguration(after = {AiAutoConfiguration.class, ArticleGeneratorAutoConfiguration.class})
+@AutoConfiguration(after = AiAutoConfiguration.class)
 @EnableConfigurationProperties(PreguntaGeneratorProperties.class)
 public class PreguntaGeneratorAutoConfiguration {
 

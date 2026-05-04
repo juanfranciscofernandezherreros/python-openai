@@ -1,6 +1,6 @@
 package io.github.aigen.article.application;
 
-import io.github.aigen.shared.config.ArticleGeneratorProperties;
+import io.github.aigen.article.config.ArticleGeneratorProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
